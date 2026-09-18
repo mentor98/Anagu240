@@ -1876,3 +1876,141 @@ Work through this checklist in order. Do not tick a box until the gate condition
 
 *End of PROJECT.md — Anagu Land Administration Framework*
 *Last updated: September 2026*
+
+---
+
+## 21. Supabase Integration
+
+### Project Details
+
+| Field | Value |
+|-------|-------|
+| Project URL | `https://wcykxpsbtbsoxxmitslk.supabase.co` |
+| Publishable Key | `sb_publishable_MwJtKiIDQB-46QhW1xvkXA_Lh_apL1j` |
+| Secret Key | `sb_secret_thAF9VsMgYKehwhRhBj0TA_gTVhKROO` *(server-side only — never expose in browser)* |
+| JWKS URL | `https://wcykxpsbtbsoxxmitslk.supabase.co/auth/v1/.well-known/jwks.json` |
+
+### What Supabase Does in This Project
+
+Supabase serves four distinct roles:
+
+| Role | Where | Details |
+|------|-------|---------|
+| **Auth** | Web + Mobile | Citizen self-registration, email/password login. JWT issued by Supabase, verified by backend via JWKS. |
+| **Realtime** | Web + Mobile | `postgres_changes` subscriptions on `applications` and `land_titles` tables for live UI updates without polling. |
+| **Admin DB** | Backend | `SupabaseService` (server-side secret key) syncs title issuance, application status changes, and audit events to Supabase for external access. |
+| **JWT Verification** | Backend | `SupabaseAuthGuard` calls `supabase.auth.getUser(token)` which validates the Bearer token against the JWKS endpoint. |
+
+### File Locations
+
+```
+apps/
+  backend/src/supabase/
+    supabase.module.ts        # Global NestJS module
+    supabase.service.ts       # Admin client, verifyToken(), syncLandTitle(), syncAuditEvent()
+    supabase-auth.guard.ts    # @UseGuards(SupabaseAuthGuard) — accepts Supabase JWTs
+
+  web/src/lib/
+    supabase.ts               # Anon client (browser-safe), realtime subscriptions
+
+  mobile/src/services/
+    supabase.ts               # Anon client, SecureStore JWT persistence, realtime
+```
+
+### Auth Flow
+
+```
+Web / Mobile                    Supabase                      NestJS Backend
+─────────────────               ─────────────────────         ─────────────────────
+1. supabase.auth.signIn()  →    Issues JWT (RS256)
+2. Store JWT (SecureStore        JWKS endpoint available:
+   on mobile, localStorage        /auth/v1/.well-known/jwks.json
+   on web)
+3. API request with             
+   Bearer <jwt>            →                             →    SupabaseAuthGuard
+                                                              calls getUser(token)
+                                                              attaches user to request
+                                                              ↓
+                                                         Route handler runs
+4. Supabase realtime  ←─────── postgres_changes event ─ SupabaseService.syncLandTitle()
+   subscription fires                                         or syncApplicationStatus()
+   → UI updates live
+```
+
+### Realtime Subscriptions
+
+Two subscriptions are active in the web app and mobile app:
+
+1. **Application status updates** — triggers on `UPDATE` to `applications` table filtered by `applicant_id` (web) or `id` (mobile detail screen). Used for the live pipeline progress bar.
+2. **Title issuance events** — triggers on `INSERT` to `land_titles`. Used on the registrar dashboard.
+
+### Environment Variables
+
+Web (`.env.local`):
+```
+NEXT_PUBLIC_SUPABASE_URL=https://wcykxpsbtbsoxxmitslk.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_MwJtKiIDQB-46QhW1xvkXA_Lh_apL1j
+```
+
+Backend (`.env` / root):
+```
+SUPABASE_URL=https://wcykxpsbtbsoxxmitslk.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_thAF9VsMgYKehwhRhBj0TA_gTVhKROO
+SUPABASE_JWKS_URL=https://wcykxpsbtbsoxxmitslk.supabase.co/auth/v1/.well-known/jwks.json
+```
+
+Mobile (`app.json` → `extra`):
+```json
+{
+  "supabaseUrl":            "https://wcykxpsbtbsoxxmitslk.supabase.co",
+  "supabasePublishableKey": "sb_publishable_MwJtKiIDQB-46QhW1xvkXA_Lh_apL1j"
+}
+```
+
+---
+
+## 22. GitHub Repository
+
+| Field | Value |
+|-------|-------|
+| Repository URL | `https://github.com/olamideolatunde079-spec/Anagu` |
+| Default branch | `main` |
+| Initial commit | `070ecc0` — 114 files, 9,410 insertions |
+
+### Git Workflow
+
+```bash
+# Clone the repo
+git clone https://github.com/olamideolatunde079-spec/Anagu.git
+
+# Create a feature branch (never commit directly to main)
+git checkout -b feat/your-feature-name
+
+# Stage and commit
+git add <files>
+git commit -m "feat(component): description"
+
+# Push and open PR
+git push -u origin feat/your-feature-name
+gh pr create --title "feat: ..." --body "..."
+```
+
+### Commit Message Convention
+
+```
+<type>(<scope>): <short description>
+
+Types:   feat | fix | chore | docs | test | refactor | perf
+Scopes:  gis | blockchain | oracle | mqtt | auth | parcels | contracts | mobile | web | infra
+```
+
+### Branch Protection (Recommended)
+
+Set up on GitHub → Settings → Branches → main:
+- Require pull request reviews before merging (1 reviewer)
+- Require status checks to pass (build, tests)
+- Restrict pushes to `main`
+
+---
+
+*End of PROJECT.md — last updated September 2026*
