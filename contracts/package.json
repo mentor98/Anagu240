@@ -1,0 +1,39 @@
+{
+  "name": "@anagu/contracts",
+  "version": "1.0.0",
+  "description": "Anagu smart contracts — LandTitleNFT (ERC-721) and LandRegistry",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test --network hardhat",
+    "test:besu": "hardhat test --network besu_local",
+    "deploy:local": "hardhat run scripts/deploy.ts --network besu_local",
+    "deploy:hardhat": "hardhat run scripts/deploy.ts --network hardhat",
+    "typechain": "hardhat typechain",
+    "clean": "hardhat clean",
+    "coverage": "hardhat coverage",
+    "verify:besu": "hardhat run scripts/verify.ts --network besu_local",
+    "node": "hardhat node"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "5.0.0",
+    "@nomicfoundation/hardhat-chai-matchers": "2.0.6",
+    "@nomicfoundation/hardhat-ethers": "3.0.5",
+    "@nomicfoundation/hardhat-network-helpers": "1.0.10",
+    "@typechain/ethers-v6": "0.5.1",
+    "@typechain/hardhat": "9.1.0",
+    "@types/chai": "4.3.14",
+    "@types/mocha": "10.0.6",
+    "@types/node": "20.12.7",
+    "chai": "4.4.1",
+    "ethers": "6.11.1",
+    "hardhat": "2.22.2",
+    "hardhat-gas-reporter": "1.0.10",
+    "solidity-coverage": "0.8.12",
+    "ts-node": "10.9.2",
+    "typechain": "8.3.2",
+    "typescript": "5.4.5"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "4.9.6"
+  }
+}
