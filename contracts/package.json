@@ -12,7 +12,9 @@
     "clean": "hardhat clean",
     "coverage": "hardhat coverage",
     "verify:besu": "hardhat run scripts/verify.ts --network besu_local",
-    "node": "hardhat node"
+    "node": "hardhat node",
+    "seed:local": "hardhat run scripts/seed.ts --network besu_local",
+    "verify:local": "hardhat run scripts/verify.ts --network besu_local"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "5.0.0",

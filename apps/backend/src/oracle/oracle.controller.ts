@@ -28,6 +28,18 @@ export class OracleController {
       'Match/conflict criteria documented in PROJECT.md Section 10.',
   })
   async verify(@Body() dto: VerifyOwnershipDto) {
-    return this.oracleService.verify(dto, this.registryAdapter);
+    // Map DTO (undefined-safe) to service interface (null-safe)
+    return this.oracleService.verify(
+      {
+        applicationId:      dto.applicationId,
+        ownerName:          dto.ownerName,
+        nationalId:         dto.nationalId,
+        surveyPlanNumber:   dto.surveyPlanNumber,
+        communityWitnesses: dto.communityWitnesses,
+        legalClearanceHash: dto.legalClearanceHash ?? null,
+        documents:          dto.documents ?? [],
+      },
+      this.registryAdapter,
+    );
   }
 }
