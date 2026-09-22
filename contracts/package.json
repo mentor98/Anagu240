@@ -28,14 +28,21 @@
     "@types/node": "20.12.7",
     "chai": "4.4.1",
     "ethers": "6.11.1",
-    "hardhat": "2.22.2",
+    "hardhat": "2.22.17",
     "hardhat-gas-reporter": "1.0.10",
     "solidity-coverage": "0.8.12",
     "ts-node": "10.9.2",
     "typechain": "8.3.2",
-    "typescript": "5.4.5"
+    "typescript": "5.4.5",
+    "@nomicfoundation/hardhat-ignition-ethers": "^0.15.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@nomicfoundation/hardhat-ignition": "^0.15.0"
   },
   "dependencies": {
     "@openzeppelin/contracts": "4.9.6"
+  },
+  "ts-node": {
+    "transpileOnly": true,
+    "esm": false
   }
 }

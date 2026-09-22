@@ -11,46 +11,44 @@ import "@openzeppelin/contracts/utils/Counters.sol";
  * @notice ERC-721 land title token for the Anagu Land Administration Framework.
  *
  * @dev    Key design decisions:
- *         - Owner-initiated transfers are DISABLED. All transfers must go through
- *           an address holding REGISTRAR_ROLE (the land registry process).
- *         - Statutory revocation is restricted to GOVERNOR_ROLE only, on two
- *           grounds defined by Nigeria's Land Use Act (1978), Section 28.
- *         - Revocation is recorded as an immutable on-chain EVENT, not a field
- *           update — the original issuance record is never overwritten.
- *         - Revoked tokens cannot be transferred.
  *
- * @dev    NFT metadata fields (per token):
- *         - tokenId:       unique on-chain identifier
- *         - parcelId:      off-chain UUID of the land parcel
- *         - spatialHash:   keccak256 of the parcel's WKT polygon geometry
- *         - tokenURI:      link to full metadata (IPFS or MinIO)
- *         - txHash:        recorded off-chain via TitleIssued event
+ *  1. Owner-initiated transfers are DISABLED.
+ *     All transfers must be initiated by an address holding REGISTRAR_ROLE.
+ *     We bypass the ERC-721 approval gate by calling _transfer() directly,
+ *     because the registrar acts as the institutional authority — not a
+ *     peer-to-peer marketplace participant.
+ *
+ *  2. Statutory revocation restricted to GOVERNOR_ROLE only, on the two
+ *     grounds defined by Nigeria's Land Use Act (1978), Section 28:
+ *       - OverridingPublicInterest
+ *       - BreachOfStatutoryCondition
+ *
+ *  3. Revocation is an immutable on-chain EVENT supplementing the original
+ *     issuance record — the issuance record is never overwritten.
+ *
+ *  4. Revoked tokens cannot be transferred (enforced in _beforeTokenTransfer).
  */
 contract LandTitleNFT is ERC721, ERC721URIStorage, AccessControl {
     using Counters for Counters.Counter;
 
-    // ── Role constants ─────────────────────────────────────────────────────
+    // ── Roles ──────────────────────────────────────────────────────────────
     bytes32 public constant REGISTRAR_ROLE = keccak256("REGISTRAR_ROLE");
     bytes32 public constant GOVERNOR_ROLE  = keccak256("GOVERNOR_ROLE");
 
-    // ── Statutory revocation grounds (Land Use Act 1978, s.28) ───────────
+    // ── Revocation grounds (Land Use Act 1978, s.28) ───────────────────────
     enum RevocationGround {
-        OverridingPublicInterest,       // 0
-        BreachOfStatutoryCondition      // 1
+        OverridingPublicInterest,    // 0
+        BreachOfStatutoryCondition   // 1
     }
 
-    // ── Token counters and state ───────────────────────────────────────────
+    // ── State ──────────────────────────────────────────────────────────────
     Counters.Counter private _tokenIdCounter;
 
     mapping(uint256 => bool)    public isRevoked;
-    mapping(uint256 => bytes32) public spatialHash;  // keccak256 of parcel WKT
-    mapping(uint256 => string)  public parcelId;     // off-chain parcel UUID
+    mapping(uint256 => bytes32) public spatialHash; // keccak256 of parcel WKT
+    mapping(uint256 => string)  public parcelId;    // off-chain parcel UUID
 
-    // ── Events ────────────────────────────────────────────────────────────
-    /**
-     * @dev Emitted when a new land title NFT is issued.
-     *      The txHash is available from the transaction receipt off-chain.
-     */
+    // ── Events ─────────────────────────────────────────────────────────────
     event TitleIssued(
         uint256 indexed tokenId,
         address indexed owner,
@@ -59,11 +57,6 @@ contract LandTitleNFT is ERC721, ERC721URIStorage, AccessControl {
         uint256 timestamp
     );
 
-    /**
-     * @dev Emitted on statutory revocation. This event is the permanent
-     *      on-chain record of the revocation — it supplements, not replaces,
-     *      the original TitleIssued event.
-     */
     event TitleRevoked(
         uint256 indexed tokenId,
         RevocationGround ground,
@@ -71,33 +64,23 @@ contract LandTitleNFT is ERC721, ERC721URIStorage, AccessControl {
         uint256 timestamp
     );
 
-    // ── Constructor ───────────────────────────────────────────────────────
+    // ── Constructor ────────────────────────────────────────────────────────
     constructor(address adminAddress) ERC721("AnaguLandTitle", "ALT") {
         require(adminAddress != address(0), "LandTitleNFT: zero admin address");
         _grantRole(DEFAULT_ADMIN_ROLE, adminAddress);
         _grantRole(REGISTRAR_ROLE,     adminAddress);
     }
 
-    // ── Title issuance ─────────────────────────────────────────────────────
-    /**
-     * @notice Issue a new land title NFT.
-     * @dev    Only callable by REGISTRAR_ROLE. The application must have
-     *         already passed spatial and ownership verification off-chain.
-     * @param  to          Address of the new titleholder.
-     * @param  _parcelId   UUID of the off-chain land parcel record.
-     * @param  _spatialHash keccak256 hash of the parcel's WKT polygon.
-     * @param  _tokenURI   Metadata URI (IPFS CID or MinIO presigned URL).
-     * @return tokenId     The newly minted ERC-721 token ID.
-     */
+    // ── Issuance ───────────────────────────────────────────────────────────
     function issueTitle(
         address        to,
         string calldata _parcelId,
         bytes32         _spatialHash,
         string calldata _tokenURI
     ) external onlyRole(REGISTRAR_ROLE) returns (uint256 tokenId) {
-        require(to != address(0),              "LandTitleNFT: zero owner address");
-        require(bytes(_parcelId).length > 0,   "LandTitleNFT: empty parcel ID");
-        require(_spatialHash != bytes32(0),    "LandTitleNFT: zero spatial hash");
+        require(to != address(0),            "LandTitleNFT: zero owner address");
+        require(bytes(_parcelId).length > 0, "LandTitleNFT: empty parcel ID");
+        require(_spatialHash != bytes32(0),  "LandTitleNFT: zero spatial hash");
 
         _tokenIdCounter.increment();
         tokenId = _tokenIdCounter.current();
@@ -111,39 +94,62 @@ contract LandTitleNFT is ERC721, ERC721URIStorage, AccessControl {
         emit TitleIssued(tokenId, to, _parcelId, _spatialHash, block.timestamp);
     }
 
-    // ── Statutory revocation (Land Use Act 1978, s.28) ────────────────────
-    /**
-     * @notice Revoke a land title on a statutory ground.
-     * @dev    Restricted to GOVERNOR_ROLE. Valid grounds are defined by
-     *         Nigeria's Land Use Act (1978), Section 28:
-     *         0 = OverridingPublicInterest
-     *         1 = BreachOfStatutoryCondition
-     *
-     *         This is a distinct executive act. A judicial dispute-resolution
-     *         mechanism does NOT satisfy this requirement, even if it results
-     *         in a title change.
-     *
-     * @param  tokenId  The ERC-721 token ID to revoke.
-     * @param  ground   The statutory ground for revocation.
-     */
+    // ── Statutory revocation (LUA 1978, s.28) ──────────────────────────────
     function revoke(uint256 tokenId, RevocationGround ground)
         external
         onlyRole(GOVERNOR_ROLE)
     {
-        require(_exists(tokenId),       "LandTitleNFT: token does not exist");
-        require(!isRevoked[tokenId],    "LandTitleNFT: already revoked");
+        require(_exists(tokenId),    "LandTitleNFT: token does not exist");
+        require(!isRevoked[tokenId], "LandTitleNFT: already revoked");
 
         isRevoked[tokenId] = true;
-
         emit TitleRevoked(tokenId, ground, msg.sender, block.timestamp);
     }
 
-    // ── Transfer guards ───────────────────────────────────────────────────
-
+    // ── Registry-controlled transfer ───────────────────────────────────────
     /**
-     * @dev Block ALL transfers of revoked tokens.
-     *      OpenZeppelin v4 hook — use _update() on OZ v5.
+     * @dev  The REGISTRAR calls _transfer() directly, bypassing ERC-721's
+     *       _isApprovedOrOwner() check.  This is intentional: the land
+     *       registry is the institutional authority and does not need the
+     *       owner's per-token approval to execute a lawful title transfer.
+     *
+     *       Any direct call to transferFrom / safeTransferFrom by a
+     *       non-REGISTRAR address (including the owner) is rejected.
      */
+    function registrarTransfer(address from, address to, uint256 tokenId)
+        external
+        onlyRole(REGISTRAR_ROLE)
+    {
+        require(to != address(0), "LandTitleNFT: transfer to zero address");
+        _transfer(from, to, tokenId); // _beforeTokenTransfer checks isRevoked
+    }
+
+    // ── Block ALL direct ERC-721 transfer calls from non-registrars ────────
+    function transferFrom(address from, address to, uint256 tokenId)
+        public
+        override(ERC721, IERC721)
+    {
+        // Only the REGISTRAR can initiate transfers — not the owner, not approved
+        require(hasRole(REGISTRAR_ROLE, msg.sender), "LandTitleNFT: only REGISTRAR can transfer");
+        _transfer(from, to, tokenId);
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId)
+        public
+        override(ERC721, IERC721)
+    {
+        require(hasRole(REGISTRAR_ROLE, msg.sender), "LandTitleNFT: only REGISTRAR can transfer");
+        _safeTransfer(from, to, tokenId, "");
+    }
+
+    function safeTransferFrom(
+        address from, address to, uint256 tokenId, bytes memory data
+    ) public override(ERC721, IERC721) {
+        require(hasRole(REGISTRAR_ROLE, msg.sender), "LandTitleNFT: only REGISTRAR can transfer");
+        _safeTransfer(from, to, tokenId, data);
+    }
+
+    // ── _beforeTokenTransfer: block revoked token transfers ────────────────
     function _beforeTokenTransfer(
         address from,
         address to,
@@ -154,63 +160,21 @@ contract LandTitleNFT is ERC721, ERC721URIStorage, AccessControl {
         super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 
-    /**
-     * @dev Block owner-initiated transferFrom.
-     *      Only REGISTRAR_ROLE may call transfer functions.
-     */
-    function transferFrom(address from, address to, uint256 tokenId)
-        public
-        override(ERC721, IERC721)
-        onlyRole(REGISTRAR_ROLE)
-    {
-        super.transferFrom(from, to, tokenId);
-    }
-
-    function safeTransferFrom(address from, address to, uint256 tokenId)
-        public
-        override(ERC721, IERC721)
-        onlyRole(REGISTRAR_ROLE)
-    {
-        super.safeTransferFrom(from, to, tokenId);
-    }
-
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 tokenId,
-        bytes memory data
-    ) public override(ERC721, IERC721) onlyRole(REGISTRAR_ROLE) {
-        super.safeTransferFrom(from, to, tokenId, data);
-    }
-
-    // ── View helpers ─────────────────────────────────────────────────────
+    // ── View helpers ────────────────────────────────────────────────────────
     function totalSupply() external view returns (uint256) {
         return _tokenIdCounter.current();
     }
 
-    // ── Required OpenZeppelin overrides ───────────────────────────────────
+    // ── Required OZ overrides ───────────────────────────────────────────────
     function tokenURI(uint256 tokenId)
-        public
-        view
-        override(ERC721, ERC721URIStorage)
-        returns (string memory)
-    {
-        return super.tokenURI(tokenId);
-    }
+        public view override(ERC721, ERC721URIStorage) returns (string memory)
+    { return super.tokenURI(tokenId); }
 
     function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(ERC721, ERC721URIStorage, AccessControl)
-        returns (bool)
-    {
-        return super.supportsInterface(interfaceId);
-    }
+        public view override(ERC721, ERC721URIStorage, AccessControl) returns (bool)
+    { return super.supportsInterface(interfaceId); }
 
     function _burn(uint256 tokenId)
-        internal
-        override(ERC721, ERC721URIStorage)
-    {
-        super._burn(tokenId);
-    }
+        internal override(ERC721, ERC721URIStorage)
+    { super._burn(tokenId); }
 }

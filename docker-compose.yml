@@ -167,3 +167,19 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+
+  # ── Nginx reverse proxy ────────────────────────────────────
+  nginx:
+    build:
+      context: ./infra/nginx
+      dockerfile: Dockerfile
+    container_name: anagu_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - mqtt
+    networks:
+      - anagu_net
+    profiles:
+      - production
