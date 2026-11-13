@@ -86,7 +86,7 @@ services:
 
   # ── MinIO bucket initialiser (runs once then exits) ───────
   minio_init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     container_name: anagu_minio_init
     depends_on:
       minio:

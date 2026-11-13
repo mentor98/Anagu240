@@ -1,25 +1,49 @@
 /**
- * StatusBadge — coloured pill showing an application or title status.
+ * StatusBadge — coloured pill showing application, parcel, or title status.
+ * Uses ANAGU dark design tokens.
  */
-const STATUS_STYLES: Record<string, string> = {
-  SUBMITTED:             "bg-blue-100 text-blue-700",
-  SPATIAL_VERIFIED:      "bg-cyan-100 text-cyan-700",
-  OWNERSHIP_VERIFIED:    "bg-teal-100 text-teal-700",
-  LEGAL_VERIFIED:        "bg-indigo-100 text-indigo-700",
-  APPROVED:              "bg-green-100 text-green-700",
-  BLOCKCHAIN_REGISTERED: "bg-purple-100 text-purple-700",
-  NFT_ISSUED:            "bg-violet-100 text-violet-700",
-  COMPLETED:             "bg-emerald-100 text-emerald-700",
-  REJECTED:              "bg-red-100 text-red-700",
-  CANCELLED:             "bg-gray-100 text-gray-600",
-  REVOKED:               "bg-orange-100 text-orange-700",
+
+interface StatusConfig {
+  cls: string;
+  dot: string;
+  label: string;
+}
+
+const STATUS_MAP: Record<string, StatusConfig> = {
+  SUBMITTED:             { cls: "badge-info",    dot: "bg-[#168BFF]", label: "Submitted" },
+  SPATIAL_VERIFIED:      { cls: "badge-info",    dot: "bg-[#168BFF]", label: "Spatial Verified" },
+  OWNERSHIP_VERIFIED:    { cls: "badge-purple",  dot: "bg-[#6338F5]", label: "Ownership Verified" },
+  LEGAL_VERIFIED:        { cls: "badge-purple",  dot: "bg-[#6338F5]", label: "Legal Verified" },
+  APPROVED:              { cls: "badge-success", dot: "bg-[#13C98A]", label: "Approved" },
+  BLOCKCHAIN_REGISTERED: { cls: "badge-success", dot: "bg-[#13C98A]", label: "Blockchain Registered" },
+  NFT_ISSUED:            { cls: "badge-success", dot: "bg-[#13C98A]", label: "NFT Issued" },
+  COMPLETED:             { cls: "badge-success", dot: "bg-[#13C98A]", label: "Completed" },
+  REJECTED:              { cls: "badge-danger",  dot: "bg-[#EF4444]", label: "Rejected" },
+  CANCELLED:             { cls: "badge-neutral", dot: "bg-[#AAB4CC]", label: "Cancelled" },
+  REVOKED:               { cls: "badge-danger",  dot: "bg-[#EF4444]", label: "Revoked" },
+  PENDING:               { cls: "badge-warning", dot: "bg-[#F0B429]", label: "Pending" },
+  ACTIVE:                { cls: "badge-success", dot: "bg-[#13C98A]", label: "Active" },
+  DISPUTED:              { cls: "badge-warning", dot: "bg-[#F0B429]", label: "Disputed" },
 };
 
-export function StatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? "bg-gray-100 text-gray-600";
+interface StatusBadgeProps {
+  status: string;
+  showDot?: boolean;
+}
+
+export function StatusBadge({ status, showDot = true }: StatusBadgeProps) {
+  const cfg = STATUS_MAP[status] ?? {
+    cls: "badge-neutral",
+    dot: "bg-[#AAB4CC]",
+    label: status.replace(/_/g, " "),
+  };
+
   return (
-    <span className={`status-badge ${style}`}>
-      {status.replace(/_/g, " ")}
+    <span className={`badge ${cfg.cls}`}>
+      {showDot && (
+        <span className={`inline-block w-1.5 h-1.5 rounded-full ${cfg.dot}`} aria-hidden="true" />
+      )}
+      {cfg.label}
     </span>
   );
 }

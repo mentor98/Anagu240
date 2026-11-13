@@ -2,58 +2,218 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Leaflet map fix for Next.js */
-@import "leaflet/dist/leaflet.css";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ── Design tokens (from ANAGU_Stitch_UI_UX_Spec.md) ─────────────── */
+:root {
+  /* Dark theme (default) */
+  --bg-midnight:     #080D24;
+  --surface-navy:    #111832;
+  --surface-elevated:#171A3B;
+  --primary-purple:  #6338F5;
+  --accent-blue:     #168BFF;
+  --success-emerald: #13C98A;
+  --warning-gold:    #F0B429;
+  --danger-red:      #EF4444;
+  --text-primary:    #FFFFFF;
+  --text-secondary:  #AAB4CC;
+  --border:          #29345A;
+
+  /* Gradient */
+  --gradient-primary: linear-gradient(135deg, #6338F5 0%, #168BFF 100%);
+  --gradient-hero:    linear-gradient(135deg, #080D24 0%, #111832 50%, #171A3B 100%);
+
+  /* Glow */
+  --glow-purple: 0 0 20px rgba(99, 56, 245, 0.3);
+  --glow-blue:   0 0 20px rgba(22, 139, 255, 0.3);
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --bg-midnight:     #F0F4F8;
+  --surface-navy:    #FFFFFF;
+  --surface-elevated:#F8FAFC;
+  --text-primary:    #0F172A;
+  --text-secondary:  #475569;
+  --border:          #E2E8F0;
+}
 
 @layer base {
-  :root {
-    --color-primary: 27 79 114;
-    --color-secondary: 17 122 101;
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply font-sans;
+    background-color: var(--bg-midnight);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, sans-serif;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold tracking-tight;
-  }
+  /* Scrollbar */
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--surface-navy); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3D4F7A; }
 }
 
 @layer components {
+  /* ── Buttons ─────────────────────────────────────────────────── */
   .btn-primary {
-    @apply bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark
-           focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
-           disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl
+           font-semibold text-sm text-white transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent
+           disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+    background: var(--gradient-primary);
+    box-shadow: var(--glow-purple);
+    focus-ring-color: var(--primary-purple);
+  }
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 0 30px rgba(99, 56, 245, 0.5);
+    transform: translateY(-1px);
   }
 
   .btn-secondary {
-    @apply bg-secondary text-white px-4 py-2 rounded-lg hover:bg-secondary-dark
-           focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2
-           disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl
+           font-semibold text-sm transition-all duration-200
+           focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+    background: var(--surface-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
   }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--primary-purple); }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+           font-medium text-sm transition-all duration-200
+           hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed;
+    color: var(--text-secondary);
+  }
+  .btn-ghost:hover { color: var(--text-primary); }
 
   .btn-danger {
-    @apply bg-danger text-white px-4 py-2 rounded-lg hover:bg-danger-dark
-           focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-2
-           disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl
+           font-semibold text-sm text-white transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
+    background: var(--danger-red);
   }
 
+  /* ── Cards ───────────────────────────────────────────────────── */
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
+    @apply rounded-2xl p-6;
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+  }
+  .card-navy {
+    @apply rounded-2xl p-6;
+    background: var(--surface-navy);
+    border: 1px solid var(--border);
   }
 
-  .input-field {
-    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-           focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent
-           disabled:bg-gray-100 disabled:cursor-not-allowed;
+  /* ── Inputs ──────────────────────────────────────────────────── */
+  .input {
+    @apply w-full px-4 py-3 rounded-xl text-sm transition-all duration-200
+           focus:outline-none focus:ring-2 placeholder:text-sm;
+    background: var(--surface-navy);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    --tw-ring-color: var(--primary-purple);
   }
+  .input:focus { border-color: var(--primary-purple); }
+  .input::placeholder { color: var(--text-secondary); }
 
   .label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+    @apply block text-sm font-medium mb-1.5;
+    color: var(--text-secondary);
   }
 
-  .status-badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  /* ── Status badges ───────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+  .badge-success  { background: rgba(19,201,138,.15); color: var(--success-emerald); }
+  .badge-warning  { background: rgba(240,180,41,.15);  color: var(--warning-gold); }
+  .badge-danger   { background: rgba(239,68,68,.15);   color: var(--danger-red); }
+  .badge-info     { background: rgba(22,139,255,.15);  color: var(--accent-blue); }
+  .badge-purple   { background: rgba(99,56,245,.15);   color: var(--primary-purple); }
+  .badge-neutral  { background: rgba(170,180,204,.1);  color: var(--text-secondary); }
+
+  /* ── Sidebar ─────────────────────────────────────────────────── */
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium
+           transition-all duration-150 cursor-pointer;
+    color: var(--text-secondary);
+  }
+  .sidebar-link:hover {
+    background: rgba(99,56,245,.08);
+    color: var(--text-primary);
+  }
+  .sidebar-link.active {
+    background: rgba(99,56,245,.15);
+    color: var(--text-primary);
+    border-left: 3px solid var(--primary-purple);
+  }
+
+  /* ── Metric card ─────────────────────────────────────────────── */
+  .metric-card {
+    @apply card flex flex-col gap-2;
+  }
+  .metric-card .metric-value {
+    @apply text-3xl font-bold;
+    color: var(--text-primary);
+  }
+  .metric-card .metric-label {
+    @apply text-sm;
+    color: var(--text-secondary);
+  }
+
+  /* ── Table ───────────────────────────────────────────────────── */
+  .data-table { @apply w-full text-sm; }
+  .data-table th {
+    @apply text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table td {
+    @apply px-4 py-3.5;
+    border-bottom: 1px solid rgba(41,52,90,.5);
+    color: var(--text-primary);
+  }
+  .data-table tr:hover td { background: rgba(255,255,255,.02); }
+
+  /* ── Timeline ────────────────────────────────────────────────── */
+  .timeline-item {
+    @apply relative flex gap-4 pb-6;
+  }
+  .timeline-item::before {
+    content: '';
+    @apply absolute left-4 top-8 bottom-0 w-px;
+    background: var(--border);
+  }
+  .timeline-item:last-child::before { display: none; }
+  .timeline-dot {
+    @apply w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10;
+    background: var(--surface-elevated);
+    border: 2px solid var(--border);
+  }
+  .timeline-dot.done  { background: rgba(19,201,138,.2); border-color: var(--success-emerald); }
+  .timeline-dot.active{ background: rgba(99,56,245,.2);  border-color: var(--primary-purple); }
+  .timeline-dot.pending{ background: var(--surface-navy); border-color: var(--border); }
+
+  /* ── Gradient text ───────────────────────────────────────────── */
+  .gradient-text {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Glow card ───────────────────────────────────────────────── */
+  .glow-card {
+    @apply card;
+    box-shadow: var(--glow-purple);
   }
 }

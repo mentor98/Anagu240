@@ -146,7 +146,7 @@ Application Submission
 | Object Storage | MinIO | Land documents, survey scans |
 | Containerisation | Docker Compose | All services orchestrated |
 | Version Control | Git | Monorepo |
-
+23
 ### Blockchain Consensus Configuration
 
 **Mechanism:** Hybrid PoA–QBFT–DPoS (Proof-of-Authority + Quorum Byzantine Fault Tolerance + Delegated Proof-of-Stake)
