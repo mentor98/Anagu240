@@ -1,6 +1,7 @@
 "use client";
 /**
- * A02 — Create Account (multi-step: role selection → details)
+ * A02 — Create Account
+ * Registers via Supabase then immediately signs in — no email confirmation needed in dev.
  */
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -10,117 +11,123 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Eye, EyeOff, Loader2, Landmark, AlertCircle,
-  User, Hammer, ChevronLeft, CheckCircle2
+  User, Hammer, ChevronLeft, CheckCircle2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-// ── Schemas ──────────────────────────────────────────────────────────────────
-const stepOneSchema = z.object({
-  role: z.enum(["CITIZEN", "SURVEYOR"], { required_error: "Please select an account type" }),
-});
-
 const stepTwoSchema = z.object({
-  fullName: z.string().min(2, "Full name is required"),
-  email:    z.string().email("Enter a valid email address"),
-  phone:    z.string().min(7, "Phone number is required"),
-  password: z.string()
-    .min(8, "Password must be at least 8 characters")
-    .regex(/[A-Z]/, "Must include an uppercase letter")
-    .regex(/[0-9]/, "Must include a number"),
+  fullName:        z.string().min(2, "Full name is required"),
+  email:           z.string().email("Enter a valid email address"),
+  phone:           z.string().min(7, "Phone number is required"),
+  password:        z.string()
+    .min(8, "At least 8 characters")
+    .regex(/[A-Z]/, "One uppercase letter required")
+    .regex(/[0-9]/, "One number required"),
   confirmPassword: z.string(),
-  terms: z.literal<boolean>(true, {
+  terms:           z.literal<boolean>(true, {
     errorMap: () => ({ message: "You must accept the terms to continue" }),
   }),
 }).refine((d) => d.password === d.confirmPassword, {
   message: "Passwords do not match",
-  path: ["confirmPassword"],
+  path:    ["confirmPassword"],
 });
 
-type StepOneData = z.infer<typeof stepOneSchema>;
 type StepTwoData = z.infer<typeof stepTwoSchema>;
 
 const ROLES = [
   {
     value: "CITIZEN" as const,
-    icon:  <User  size={24} className="text-[#168BFF]" />,
+    icon:  "citizen",
     title: "Citizen / Applicant",
     desc:  "Submit land applications, track progress, view owned titles",
   },
   {
     value: "SURVEYOR" as const,
-    icon:  <Hammer size={24} className="text-[#6338F5]" />,
+    icon:  "surveyor",
     title: "Surveyor",
     desc:  "Submit parcel coordinates, GIS workspace access",
   },
 ];
 
 export default function RegisterPage() {
-  const router = useRouter();
-  const [step, setStep]           = useState(1);
-  const [role, setRole]           = useState<"CITIZEN" | "SURVEYOR">("CITIZEN");
-  const [showPw, setShowPw]       = useState(false);
+  const router                        = useRouter();
+  const [step, setStep]               = useState(1);
+  const [role, setRole]               = useState<"CITIZEN" | "SURVEYOR">("CITIZEN");
+  const [showPw, setShowPw]           = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [success, setSuccess]     = useState(false);
+  const [infoMsg, setInfoMsg]         = useState<string | null>(null);
 
   const {
     register, handleSubmit, watch,
     formState: { errors, isSubmitting },
   } = useForm<StepTwoData>({ resolver: zodResolver(stepTwoSchema) });
 
-  const pw = watch("password", "");
-
+  const pw       = watch("password", "");
   const pwChecks = [
-    { ok: pw.length >= 8,         label: "At least 8 characters" },
-    { ok: /[A-Z]/.test(pw),       label: "One uppercase letter" },
-    { ok: /[0-9]/.test(pw),       label: "One number" },
+    { ok: pw.length >= 8,   label: "At least 8 characters" },
+    { ok: /[A-Z]/.test(pw), label: "One uppercase letter"  },
+    { ok: /[0-9]/.test(pw), label: "One number"            },
   ];
 
   const onSubmit = async (data: StepTwoData) => {
+    setServerError(null);
+    setInfoMsg(null);
     try {
-      setServerError(null);
-      const { error } = await supabase.auth.signUp({
-        email:    data.email,
+      // 1. Sign up
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email:    data.email.trim().toLowerCase(),
         password: data.password,
         options:  {
-          data: {
-            full_name: data.fullName,
-            phone:     data.phone,
-            role,
-          },
+          data: { full_name: data.fullName, phone: data.phone, role },
         },
       });
-      if (error) throw error;
-      setSuccess(true);
+      if (signUpError) throw signUpError;
+
+      // 2. Auto-confirm via our server-side API so no email click needed
+      if (signUpData?.user?.id) {
+        await fetch("/api/auth/confirm", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ userId: signUpData.user.id }),
+        });
+      }
+
+      // 3. Sign in immediately
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email:    data.email.trim().toLowerCase(),
+        password: data.password,
+      });
+
+      if (signInError) {
+        // Fallback: guide them to login page
+        router.push("/login?registered=1");
+        return;
+      }
+
+      router.push("/dashboard");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Registration failed.";
-      setServerError(msg);
+      const msg = err instanceof Error ? err.message : "Registration failed";
+      if (msg.includes("already registered") || msg.includes("already been registered")) {
+        setServerError("An account with this email already exists. Try signing in instead.");
+      } else {
+        setServerError(msg);
+      }
     }
   };
 
-  if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "var(--bg-midnight)" }}>
-        <div className="max-w-md w-full text-center">
-          <div className="w-16 h-16 rounded-2xl bg-[#13C98A]/20 flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 size={32} className="text-[#13C98A]" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Account Created!</h2>
-          <p className="text-[#AAB4CC] mb-6">
-            Check your email to confirm your account, then sign in.
-          </p>
-          <Link href="/login" className="btn-primary">Go to Sign In</Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12" style={{ background: "var(--bg-midnight)" }}>
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-12"
+      style={{ background: "var(--bg-midnight)" }}
+    >
       <div
         className="fixed inset-0 pointer-events-none"
         aria-hidden="true"
-        style={{ background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99,56,245,0.15) 0%, transparent 70%)" }}
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99,56,245,0.15) 0%, transparent 70%)",
+        }}
       />
 
       <div className="relative z-10 w-full max-w-md">
@@ -136,8 +143,8 @@ export default function RegisterPage() {
           </Link>
         </div>
 
-        {/* Progress indicator */}
-        <div className="flex items-center gap-2 mb-6">
+        {/* Progress bar */}
+        <div className="flex gap-2 mb-6">
           {[1, 2].map((s) => (
             <div
               key={s}
@@ -150,9 +157,12 @@ export default function RegisterPage() {
 
         <div className="card">
           {step === 1 ? (
+            /* ── Step 1: Role selection ───────────────────────────────── */
             <>
               <h1 className="text-xl font-bold text-white mb-1">Create your account</h1>
-              <p className="text-sm text-[#AAB4CC] mb-6">First, choose your account type</p>
+              <p className="text-sm text-[#AAB4CC] mb-6">
+                First, choose your account type
+              </p>
 
               <div className="space-y-3 mb-6">
                 {ROLES.map((r) => (
@@ -166,13 +176,18 @@ export default function RegisterPage() {
                         : "border-[#29345A] hover:border-[#6338F5]/50"
                     }`}
                   >
-                    <div className="shrink-0 mt-0.5">{r.icon}</div>
-                    <div>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ background: r.value === "CITIZEN" ? "rgba(22,139,255,0.15)" : "rgba(99,56,245,0.15)" }}>
+                      {r.value === "CITIZEN"
+                        ? <User size={20} className="text-[#168BFF]" />
+                        : <Hammer size={20} className="text-[#6338F5]" />}
+                    </div>
+                    <div className="flex-1">
                       <div className="text-sm font-semibold text-white">{r.title}</div>
                       <div className="text-xs text-[#AAB4CC] mt-0.5">{r.desc}</div>
                     </div>
                     {role === r.value && (
-                      <CheckCircle2 size={18} className="ml-auto text-[#6338F5] shrink-0" />
+                      <CheckCircle2 size={18} className="text-[#6338F5] shrink-0 mt-1" />
                     )}
                   </button>
                 ))}
@@ -194,6 +209,7 @@ export default function RegisterPage() {
               </p>
             </>
           ) : (
+            /* ── Step 2: Details form ─────────────────────────────────── */
             <>
               <div className="flex items-center gap-3 mb-6">
                 <button
@@ -215,32 +231,57 @@ export default function RegisterPage() {
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
                 {/* Full name */}
                 <div>
-                  <label htmlFor="fullName" className="label">Full name</label>
-                  <input {...register("fullName")} id="fullName" type="text" className="input" placeholder="Ada Obi" />
-                  {errors.fullName && <p className="mt-1 text-xs text-[#EF4444]">{errors.fullName.message}</p>}
+                  <label htmlFor="reg-fullName" className="label">Full name</label>
+                  <input
+                    {...register("fullName")}
+                    id="reg-fullName"
+                    type="text"
+                    className="input"
+                    placeholder="Ada Obi"
+                  />
+                  {errors.fullName && (
+                    <p className="mt-1 text-xs text-[#EF4444]">{errors.fullName.message}</p>
+                  )}
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label htmlFor="email" className="label">Email address</label>
-                  <input {...register("email")} id="email" type="email" autoComplete="email" className="input" placeholder="ada@example.com" />
-                  {errors.email && <p className="mt-1 text-xs text-[#EF4444]">{errors.email.message}</p>}
+                  <label htmlFor="reg-email" className="label">Email address</label>
+                  <input
+                    {...register("email")}
+                    id="reg-email"
+                    type="email"
+                    autoComplete="email"
+                    className="input"
+                    placeholder="ada@example.com"
+                  />
+                  {errors.email && (
+                    <p className="mt-1 text-xs text-[#EF4444]">{errors.email.message}</p>
+                  )}
                 </div>
 
                 {/* Phone */}
                 <div>
-                  <label htmlFor="phone" className="label">Phone number</label>
-                  <input {...register("phone")} id="phone" type="tel" className="input" placeholder="+234 801 234 5678" />
-                  {errors.phone && <p className="mt-1 text-xs text-[#EF4444]">{errors.phone.message}</p>}
+                  <label htmlFor="reg-phone" className="label">Phone number</label>
+                  <input
+                    {...register("phone")}
+                    id="reg-phone"
+                    type="tel"
+                    className="input"
+                    placeholder="+234 801 234 5678"
+                  />
+                  {errors.phone && (
+                    <p className="mt-1 text-xs text-[#EF4444]">{errors.phone.message}</p>
+                  )}
                 </div>
 
                 {/* Password */}
                 <div>
-                  <label htmlFor="password" className="label">Password</label>
+                  <label htmlFor="reg-password" className="label">Password</label>
                   <div className="relative">
                     <input
                       {...register("password")}
-                      id="password"
+                      id="reg-password"
                       type={showPw ? "text" : "password"}
                       autoComplete="new-password"
                       className="input pr-10"
@@ -255,11 +296,18 @@ export default function RegisterPage() {
                       {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
-                  {/* Requirements */}
-                  <div className="mt-2 flex flex-col gap-1">
+                  <div className="mt-2 space-y-1">
                     {pwChecks.map((c) => (
-                      <span key={c.label} className={`flex items-center gap-1.5 text-xs ${c.ok ? "text-[#13C98A]" : "text-[#AAB4CC]"}`}>
-                        <CheckCircle2 size={11} className={c.ok ? "text-[#13C98A]" : "text-[#29345A]"} />
+                      <span
+                        key={c.label}
+                        className={`flex items-center gap-1.5 text-xs ${
+                          c.ok ? "text-[#13C98A]" : "text-[#AAB4CC]"
+                        }`}
+                      >
+                        <CheckCircle2
+                          size={11}
+                          className={c.ok ? "text-[#13C98A]" : "text-[#29345A]"}
+                        />
                         {c.label}
                       </span>
                     ))}
@@ -268,11 +316,11 @@ export default function RegisterPage() {
 
                 {/* Confirm password */}
                 <div>
-                  <label htmlFor="confirmPassword" className="label">Confirm password</label>
+                  <label htmlFor="reg-confirm" className="label">Confirm password</label>
                   <div className="relative">
                     <input
                       {...register("confirmPassword")}
-                      id="confirmPassword"
+                      id="reg-confirm"
                       type={showConfirm ? "text" : "password"}
                       autoComplete="new-password"
                       className="input pr-10"
@@ -288,7 +336,9 @@ export default function RegisterPage() {
                     </button>
                   </div>
                   {errors.confirmPassword && (
-                    <p className="mt-1 text-xs text-[#EF4444]">{errors.confirmPassword.message}</p>
+                    <p className="mt-1 text-xs text-[#EF4444]">
+                      {errors.confirmPassword.message}
+                    </p>
                   )}
                 </div>
 
@@ -306,8 +356,18 @@ export default function RegisterPage() {
                       <span className="text-[#6338F5]">Privacy Policy</span>
                     </span>
                   </label>
-                  {errors.terms && <p className="mt-1 text-xs text-[#EF4444]">{errors.terms.message}</p>}
+                  {errors.terms && (
+                    <p className="mt-1 text-xs text-[#EF4444]">{errors.terms.message}</p>
+                  )}
                 </div>
+
+                {/* Info message (email confirmation needed) */}
+                {infoMsg && (
+                  <div className="flex items-start gap-2 rounded-xl bg-[#13C98A]/10 border border-[#13C98A]/30 p-3">
+                    <CheckCircle2 size={16} className="text-[#13C98A] shrink-0 mt-0.5" />
+                    <p className="text-sm text-[#13C98A]">{infoMsg}</p>
+                  </div>
+                )}
 
                 {/* Error */}
                 {serverError && (
@@ -317,10 +377,18 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-3">
-                  {isSubmitting
-                    ? <><Loader2 size={16} className="animate-spin" /> Creating account…</>
-                    : "Create Account"}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="btn-primary w-full py-3"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" /> Creating account…
+                    </>
+                  ) : (
+                    "Create Account"
+                  )}
                 </button>
               </form>
             </>

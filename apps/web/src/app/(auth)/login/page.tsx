@@ -1,27 +1,34 @@
 "use client";
 /**
- * A01 — Sign In page
+ * A01 — Sign In
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff, Loader2, Landmark, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Loader2, Landmark, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { Suspense } from "react";
 
 const schema = z.object({
   email:      z.string().email("Enter a valid email address"),
-  password:   z.string().min(6, "Password is required"),
+  password:   z.string().min(1, "Password is required"),
   rememberMe: z.boolean().optional(),
 });
 type FormData = z.infer<typeof schema>;
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [showPassword, setShowPassword] = useState(false);
-  const [serverError, setServerError]   = useState<string | null>(null);
+function LoginForm() {
+  const router                            = useRouter();
+  const searchParams                      = useSearchParams();
+  const [showPassword, setShowPassword]   = useState(false);
+  const [serverError,  setServerError]    = useState<string | null>(null);
+  const [justRegistered, setJustRegistered] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("registered") === "1") setJustRegistered(true);
+  }, [searchParams]);
 
   const {
     register, handleSubmit,
@@ -29,17 +36,32 @@ export default function LoginPage() {
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const onSubmit = async (data: FormData) => {
+    setServerError(null);
     try {
-      setServerError(null);
       const { error } = await supabase.auth.signInWithPassword({
-        email:    data.email,
+        email:    data.email.trim().toLowerCase(),
         password: data.password,
       });
-      if (error) throw error;
+
+      if (error) {
+        // Surface a clear, helpful message
+        const msg = error.message.toLowerCase();
+        if (msg.includes("invalid login") || msg.includes("invalid credentials")) {
+          setServerError("Incorrect email or password. Double-check and try again.");
+        } else if (msg.includes("email not confirmed") || msg.includes("not confirmed")) {
+          setServerError(
+            "Your email address has not been confirmed yet. " +
+            "Check your inbox for a confirmation link, or contact support."
+          );
+        } else {
+          setServerError(error.message);
+        }
+        return;
+      }
+
       router.push("/dashboard");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Login failed. Check your credentials.";
-      setServerError(msg === "Invalid login credentials" ? "Invalid email or password." : msg);
+    } catch {
+      setServerError("Something went wrong. Please try again.");
     }
   };
 
@@ -48,11 +70,13 @@ export default function LoginPage() {
       className="min-h-screen flex items-center justify-center px-4 py-12"
       style={{ background: "var(--bg-midnight)" }}
     >
-      {/* Background glow */}
       <div
         className="fixed inset-0 pointer-events-none"
         aria-hidden="true"
-        style={{ background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99,56,245,0.15) 0%, transparent 70%)" }}
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99,56,245,0.15) 0%, transparent 70%)",
+        }}
       />
 
       <div className="relative z-10 w-full max-w-md">
@@ -69,7 +93,16 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-[#AAB4CC]">Secure · Transparent · Trusted</p>
         </div>
 
-        {/* Card */}
+        {/* Just registered banner */}
+        {justRegistered && (
+          <div className="flex items-start gap-2 rounded-xl bg-[#13C98A]/10 border border-[#13C98A]/30 p-3 mb-4">
+            <CheckCircle2 size={16} className="text-[#13C98A] shrink-0 mt-0.5" />
+            <p className="text-sm text-[#13C98A]">
+              Account created! Sign in with your email and password below.
+            </p>
+          </div>
+        )}
+
         <div className="card">
           <h1 className="text-xl font-bold text-white mb-1">Sign in to your account</h1>
           <p className="text-sm text-[#AAB4CC] mb-6">
@@ -82,25 +115,24 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             {/* Email */}
             <div>
-              <label htmlFor="email" className="label">Email address</label>
+              <label htmlFor="login-email" className="label">Email address</label>
               <input
                 {...register("email")}
-                id="email"
+                id="login-email"
                 type="email"
                 autoComplete="email"
                 className="input"
                 placeholder="you@example.com"
-                aria-invalid={!!errors.email}
               />
               {errors.email && (
-                <p className="mt-1 text-xs text-[#EF4444]" role="alert">{errors.email.message}</p>
+                <p className="mt-1 text-xs text-[#EF4444]">{errors.email.message}</p>
               )}
             </div>
 
             {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="password" className="label mb-0">Password</label>
+                <label htmlFor="login-password" className="label mb-0">Password</label>
                 <Link href="/forgot-password" className="text-xs text-[#6338F5] hover:underline">
                   Forgot password?
                 </Link>
@@ -108,12 +140,11 @@ export default function LoginPage() {
               <div className="relative">
                 <input
                   {...register("password")}
-                  id="password"
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   className="input pr-10"
                   placeholder="••••••••"
-                  aria-invalid={!!errors.password}
                 />
                 <button
                   type="button"
@@ -125,7 +156,7 @@ export default function LoginPage() {
                 </button>
               </div>
               {errors.password && (
-                <p className="mt-1 text-xs text-[#EF4444]" role="alert">{errors.password.message}</p>
+                <p className="mt-1 text-xs text-[#EF4444]">{errors.password.message}</p>
               )}
             </div>
 
@@ -142,33 +173,63 @@ export default function LoginPage() {
               </label>
             </div>
 
-            {/* Server error */}
+            {/* Error */}
             {serverError && (
               <div className="flex items-start gap-2 rounded-xl bg-[#EF4444]/10 border border-[#EF4444]/30 p-3">
                 <AlertCircle size={16} className="text-[#EF4444] shrink-0 mt-0.5" />
-                <p className="text-sm text-[#EF4444]">{serverError}</p>
+                <div>
+                  <p className="text-sm text-[#EF4444]">{serverError}</p>
+                  {serverError.includes("not been confirmed") && (
+                    <p className="text-xs text-[#AAB4CC] mt-1">
+                      Tip: Check your spam folder, or{" "}
+                      <button
+                        type="button"
+                        className="text-[#6338F5] hover:underline"
+                        onClick={async () => {
+                          const email = (document.getElementById("login-email") as HTMLInputElement)?.value;
+                          if (email) {
+                            await supabase.auth.resend({ type: "signup", email });
+                            setServerError("Confirmation email re-sent! Check your inbox.");
+                          }
+                        }}
+                      >
+                        resend confirmation email
+                      </button>
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={isSubmitting}
               className="btn-primary w-full py-3 text-sm"
             >
-              {isSubmitting
-                ? <><Loader2 size={16} className="animate-spin" /> Signing in…</>
-                : "Sign In"}
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Signing in…
+                </>
+              ) : (
+                "Sign In"
+              )}
             </button>
           </form>
         </div>
 
         <p className="mt-6 text-center text-xs text-[#AAB4CC]">
           By signing in, you agree to ANAGU&apos;s{" "}
-          <span className="text-[#6338F5]">Terms of Use</span> and{" "}
-          <span className="text-[#6338F5]">Privacy Policy</span>.
+          <span className="text-[#6338F5]">Terms of Use</span>.
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
