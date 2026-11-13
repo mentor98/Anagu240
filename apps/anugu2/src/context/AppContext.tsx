@@ -24,6 +24,7 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS
 } from '../data/mockData';
+import { supabase } from '../lib/supabase';
 
 interface AppContextType {
   // Theme & Role
@@ -100,11 +101,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.classList.remove('light');
   }, []);
 
+  // ── Supabase auth state listener ─────────────────────────────────────────
+  useEffect(() => {
+    // Check current session on mount
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        const u = data.session.user;
+        const meta = u.user_metadata || {};
+        const roleVal = (meta.role as string || 'citizen').toLowerCase() as UserRole;
+        setCurrentRole(roleVal);
+        // Merge real user data into the mock user object
+        const realUser: User = {
+          ...INITIAL_USERS[roleVal] || INITIAL_USERS.citizen,
+          id: u.id,
+          name: meta.full_name || u.email?.split('@')[0] || 'User',
+          email: u.email || '',
+          role: roleVal,
+          phone: meta.phone || '',
+          verified: true,
+        };
+        // We update the mock user via currentUser getter
+        INITIAL_USERS._live = realUser;
+      }
+    });
+
+    // Listen for sign-in/sign-out
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const u = session.user;
+        const meta = u.user_metadata || {};
+        const roleVal = (meta.role as string || 'citizen').toLowerCase() as UserRole;
+        setCurrentRole(roleVal);
+        const realUser: User = {
+          ...INITIAL_USERS[roleVal] || INITIAL_USERS.citizen,
+          id: u.id,
+          name: meta.full_name || u.email?.split('@')[0] || 'User',
+          email: u.email || '',
+          role: roleVal,
+          phone: meta.phone || '',
+          verified: true,
+        };
+        INITIAL_USERS._live = realUser;
+      }
+    });
+
+    return () => { listener.subscription.unsubscribe(); };
+  }, []);
+
   const toggleTheme = () => {
     // no-op (dark mode enforced)
   };
 
-  const currentUser = INITIAL_USERS[currentRole] || INITIAL_USERS.citizen;
+  const currentUser = (INITIAL_USERS as Record<string, User>)['_live'] || INITIAL_USERS[currentRole] || INITIAL_USERS.citizen;
 
   const addNotification = (notif: Omit<SystemNotification, 'id' | 'timestamp' | 'read'>) => {
     const newNotif: SystemNotification = {
