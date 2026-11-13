@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { ShieldCheck, ArrowRight, AlertTriangle, Key, Loader2, CheckCircle2 } from 'lucide-react';
 import { BackButton } from '../common/BackButton';
-import { signIn, signUpAndIn } from '../../lib/supabase';
+import { signIn, signUpAndIn, supabase } from '../../lib/supabase';
 
 // ── Login Page ────────────────────────────────────────────────────────────────
 export const LoginPage: React.FC = () => {
@@ -258,7 +258,6 @@ export const ForgotPasswordPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     // Import supabase inline to avoid circular
-    const { supabase } = await import('../../lib/supabase');
     await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin + '/auth/reset-password',
     });
