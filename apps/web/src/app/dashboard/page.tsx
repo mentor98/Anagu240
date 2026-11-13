@@ -1,16 +1,16 @@
 "use client";
 /**
- * Dashboard — role-based redirect hub.
- * Routes each role to their specific dashboard on login.
+ * Smart Dashboard — redirects to role-specific dashboard.
  */
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/useUser";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { PageLoader } from "@/components/ui/LoadingSpinner";
 
-const ROLE_HOME: Record<string, string> = {
+const ROLE_ROUTES: Record<string, string> = {
   CITIZEN:            "/citizen/dashboard",
-  SURVEYOR:           "/surveyor/dashboard",
+  SURVEYOR:           "/gis/workspace",
   REGISTRAR:          "/registrar/dashboard",
   LAND_ADMINISTRATOR: "/land-admin/dashboard",
   GOVERNOR:           "/governor/dashboard",
@@ -18,22 +18,20 @@ const ROLE_HOME: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const router = useRouter();
   const { user, loading } = useUser();
+  const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
-    if (!user) {
-      router.push("/login");
-      return;
+    if (!loading && user?.role) {
+      router.replace(ROLE_ROUTES[user.role] ?? "/citizen/dashboard");
     }
-    const dest = ROLE_HOME[user.role] ?? "/citizen/dashboard";
-    router.replace(dest);
-  }, [loading, user, router]);
+  }, [user, loading, router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-midnight)" }}>
-      <PageLoader label="Redirecting to your dashboard…" />
-    </div>
+    <AppLayout pageTitle="Dashboard">
+      <div className="flex items-center justify-center h-64">
+        <PageLoader label="Loading your dashboard…" />
+      </div>
+    </AppLayout>
   );
 }
