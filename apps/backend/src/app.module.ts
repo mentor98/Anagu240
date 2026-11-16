@@ -32,8 +32,8 @@ import { SupabaseModule } from './supabase/supabase.module';
         username: config.get('POSTGRES_USER', 'anagu'),
         password: config.get('POSTGRES_PASSWORD', 'anagu_secret'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        // production → use migrations (not synchronize)
-        synchronize: config.get('NODE_ENV') !== 'production',
+        // The schema includes PostGIS geometry/indexes; never let TypeORM synchronize it.
+        synchronize: false,
         logging: config.get('NODE_ENV') === 'development',
         ssl: config.get('NODE_ENV') === 'production'
           ? { rejectUnauthorized: false }

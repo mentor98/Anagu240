@@ -72,22 +72,22 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSidebarOpen }
             <span>Public Verification</span>
           </Link>
           <Link
-            to="/portal/gis"
+            to="/explore"
             className={`flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 hover:text-[#6338F5] dark:hover:text-white ${
-              location.pathname === '/portal/gis' ? 'text-[#6338F5] dark:text-[#168BFF] font-bold' : ''
+              location.pathname === '/explore' ? 'text-[#6338F5] dark:text-[#168BFF] font-bold' : ''
             }`}
           >
             <Layers className="w-3.5 h-3.5 text-[#13C98A]" />
-            <span>GIS Cadastre</span>
+            <span>Explore land</span>
           </Link>
           <Link
-            to="/portal/explorer"
+            to="/verify"
             className={`flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 hover:text-[#6338F5] dark:hover:text-white ${
-              location.pathname === '/portal/explorer' ? 'text-[#6338F5] dark:text-[#168BFF] font-bold' : ''
+              location.pathname === '/verify' ? 'text-[#6338F5] dark:text-[#168BFF] font-bold' : ''
             }`}
           >
             <Cpu className="w-3.5 h-3.5 text-[#6338F5]" />
-            <span>Explorer</span>
+            <span>Verify title</span>
           </Link>
           <Link
             to="/portal/dashboard"
@@ -103,7 +103,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSidebarOpen }
 
         {/* Zone 3: Actions (Role Switcher, Theme, Notifications, Profile) */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          <RoleSwitcher />
+          {import.meta.env.VITE_DEMO_MODE === 'true' && <RoleSwitcher />}
           <ThemeToggle />
           <NotificationDrawer />
 

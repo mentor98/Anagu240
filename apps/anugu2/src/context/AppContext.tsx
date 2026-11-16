@@ -12,19 +12,39 @@ import {
   AuditLog,
   SystemNotification
 } from '../types';
-import {
-  INITIAL_USERS,
-  INITIAL_PARCELS,
-  INITIAL_APPLICATIONS,
-  INITIAL_TRANSACTIONS,
-  INITIAL_BLOCKS,
-  INITIAL_SURVEY_JOBS,
-  INITIAL_COMMUNITY_ATTESTATIONS,
-  INITIAL_REVOCATIONS,
-  INITIAL_AUDIT_LOGS,
-  INITIAL_NOTIFICATIONS
-} from '../data/mockData';
-import { supabase } from '../lib/supabase';
+import { getAuth, subscribeToAuth } from '../lib/supabase';
+import { apiRequest } from '../lib/api';
+
+const GUEST_USER: User = {
+  id: '',
+  name: 'Guest',
+  email: '',
+  role: 'citizen',
+  nationalId: '',
+  walletAddress: '',
+  avatarUrl: '',
+  verified: false,
+};
+
+interface LandApplicationSubmission extends Partial<LandApplication> {
+  coordinates: [number, number][];
+  nationalId: string;
+  surveyPlanNumber?: string;
+  communityWitnesses?: string[];
+  legalClearanceHash?: string;
+  addressDesc?: string;
+}
+
+interface LandApplicationSubmissionResult {
+  applicationId: string;
+  parcelId: string;
+  spatialResult: {
+    valid: boolean;
+    reason?: string;
+    diagnosticMessage?: string;
+    spatialHash?: string;
+  };
+}
 
 interface AppContextType {
   // Theme & Role
@@ -34,6 +54,8 @@ interface AppContextType {
   currentRole: UserRole;
   setCurrentRole: (r: UserRole) => void;
   currentUser: User;
+  isAuthenticated: boolean;
+  authLoading: boolean;
 
   // Data & State
   parcels: Parcel[];
@@ -47,7 +69,7 @@ interface AppContextType {
   notifications: SystemNotification[];
 
   // Mutations
-  registerLandApplication: (data: Partial<LandApplication>) => string;
+  registerLandApplication: (data: LandApplicationSubmission) => Promise<LandApplicationSubmissionResult>;
   updateApplicationStatus: (appId: string, newStatus: LandApplication['status'], notes?: string) => void;
   signNeighborAttestation: (attestationId: string, neighborName: string, status: 'confirmed' | 'disputed', comment?: string) => void;
   submitSurveyReport: (jobId: string, notes: string, beaconsPlaced: number, planRef: string) => void;
@@ -77,15 +99,18 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [currentRole, setCurrentRole] = useState<UserRole>('citizen');
-  const [parcels, setParcels] = useState<Parcel[]>(INITIAL_PARCELS);
-  const [applications, setApplications] = useState<LandApplication[]>(INITIAL_APPLICATIONS);
-  const [transactions, setTransactions] = useState<BlockchainTransaction[]>(INITIAL_TRANSACTIONS);
-  const [blocks, setBlocks] = useState<BlockchainBlock[]>(INITIAL_BLOCKS);
-  const [surveyJobs, setSurveyJobs] = useState<SurveyJob[]>(INITIAL_SURVEY_JOBS);
-  const [communityAttestations, setCommunityAttestations] = useState<CommunityAttestation[]>(INITIAL_COMMUNITY_ATTESTATIONS);
-  const [revocations, setRevocations] = useState<RevocationRecord[]>(INITIAL_REVOCATIONS);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
-  const [notifications, setNotifications] = useState<SystemNotification[]>(INITIAL_NOTIFICATIONS);
+  const [authenticatedUser, setAuthenticatedUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [parcels, setParcels] = useState<Parcel[]>([]);
+  const [applications, setApplications] = useState<LandApplication[]>([]);
+  const [transactions, setTransactions] = useState<BlockchainTransaction[]>([]);
+  const [blocks, setBlocks] = useState<BlockchainBlock[]>([]);
+  const [surveyJobs, setSurveyJobs] = useState<SurveyJob[]>([]);
+  const [communityAttestations, setCommunityAttestations] = useState<CommunityAttestation[]>([]);
+  const [revocations, setRevocations] = useState<RevocationRecord[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
 
   // Offline Simulation
   const [isOfflineMode, setIsOfflineMode] = useState(false);
@@ -101,58 +126,112 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.classList.remove('light');
   }, []);
 
-  // ── Supabase auth state listener ─────────────────────────────────────────
+  // ── Local API JWT session ────────────────────────────────────────────────
   useEffect(() => {
-    // Check current session on mount
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) {
-        const u = data.session.user;
-        const meta = u.user_metadata || {};
-        const roleVal = (meta.role as string || 'citizen').toLowerCase() as UserRole;
-        setCurrentRole(roleVal);
-        // Merge real user data into the mock user object
-        const realUser: User = {
-          ...INITIAL_USERS[roleVal] || INITIAL_USERS.citizen,
-          id: u.id,
-          name: meta.full_name || u.email?.split('@')[0] || 'User',
-          email: u.email || '',
-          role: roleVal,
-          phone: meta.phone || '',
-          verified: true,
-        };
-        // We update the mock user via currentUser getter
-        INITIAL_USERS._live = realUser;
+    let active = true;
+    const applySession = () => {
+      if (!active) return;
+      const session = getAuth();
+      if (!session?.user) {
+        setIsAuthenticated(false);
+        setAuthenticatedUser(null);
+        setCurrentRole('citizen');
+        return;
       }
-    });
 
-    // Listen for sign-in/sign-out
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        const u = session.user;
-        const meta = u.user_metadata || {};
-        const roleVal = (meta.role as string || 'citizen').toLowerCase() as UserRole;
-        setCurrentRole(roleVal);
-        const realUser: User = {
-          ...INITIAL_USERS[roleVal] || INITIAL_USERS.citizen,
-          id: u.id,
-          name: meta.full_name || u.email?.split('@')[0] || 'User',
-          email: u.email || '',
-          role: roleVal,
-          phone: meta.phone || '',
-          verified: true,
-        };
-        INITIAL_USERS._live = realUser;
-      }
-    });
+      const user = session.user;
+      const roleMap: Record<string, UserRole> = {
+        CITIZEN: 'citizen',
+        SURVEYOR: 'surveyor',
+        REGISTRAR: 'registrar',
+        LAND_ADMINISTRATOR: 'admin',
+        GOVERNOR: 'governor',
+      };
+      const role = roleMap[String(user.role ?? '').toUpperCase()] ?? 'citizen';
+      setCurrentRole(role);
+      setIsAuthenticated(true);
+      setAuthenticatedUser({
+        ...GUEST_USER,
+        id: user.id,
+        name: user.fullName || user.email?.split('@')[0] || 'User',
+        email: user.email,
+        role,
+        nationalId: user.nationalId ?? '',
+        walletAddress: user.walletAddress ?? '',
+        verified: false,
+      });
+    };
 
-    return () => { listener.subscription.unsubscribe(); };
+    applySession();
+    setAuthLoading(false);
+    const unsubscribe = subscribeToAuth(applySession);
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setApplications([]);
+      return;
+    }
+
+    let active = true;
+    void apiRequest<Array<{
+      id: string;
+      applicantId: string;
+      ownerName: string;
+      nationalId: string;
+      surveyPlanNumber: string | null;
+      status: string;
+      createdAt: string;
+      updatedAt: string;
+      parcelId: string;
+    }>>('/applications').then((rows) => {
+      if (!active) return;
+      setApplications(rows.map((row) => ({
+        id: row.id,
+        applicationNumber: `ANAGU-${row.id.slice(0, 8).toUpperCase()}`,
+        applicantName: row.ownerName,
+        applicantId: row.applicantId,
+        applicantPhone: '',
+        applicantEmail: '',
+        tenureType: 'Statutory',
+        state: '',
+        lga: '',
+        district: row.parcelId,
+        landUse: 'Residential',
+        estimatedAreaSqm: 0,
+        status: row.status === 'REJECTED' ? 'rejected' : 'submitted',
+        dateSubmitted: row.createdAt.slice(0, 10),
+        lastUpdated: row.updatedAt.slice(0, 10),
+        attestationsCount: 0,
+        requiredAttestations: 4,
+        notes: `Application status: ${row.status}`,
+        documents: [],
+        surveyorSurconNo: row.surveyPlanNumber ?? undefined,
+      })));
+    }).catch((error: unknown) => {
+      if (active) {
+        console.error('Could not load land applications.', error);
+        addNotification({
+          title: 'Applications unavailable',
+          message: error instanceof Error ? error.message : 'The application service could not be reached.',
+          type: 'error',
+        });
+      }
+    });
+
+    return () => { active = false; };
+  }, [isAuthenticated]);
 
   const toggleTheme = () => {
     // no-op (dark mode enforced)
   };
 
-  const currentUser = (INITIAL_USERS as Record<string, User>)['_live'] || INITIAL_USERS[currentRole] || INITIAL_USERS.citizen;
+  const currentUser = authenticatedUser || GUEST_USER;
 
   const addNotification = (notif: Omit<SystemNotification, 'id' | 'timestamp' | 'read'>) => {
     const newNotif: SystemNotification = {
@@ -186,23 +265,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuditLogs(prev => [newLog, ...prev]);
   };
 
-  const registerLandApplication = (data: Partial<LandApplication>): string => {
-    const newId = `app-00${applications.length + 1}`;
-    const appNum = `ANAGU-APP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+  const registerLandApplication = async (
+    data: LandApplicationSubmission,
+  ): Promise<LandApplicationSubmissionResult> => {
+    const result = await apiRequest<LandApplicationSubmissionResult>('/applications', {
+      method: 'POST',
+      body: JSON.stringify({
+        ownerName: data.applicantName || currentUser.name,
+        nationalId: data.nationalId,
+        surveyPlanNumber: data.surveyPlanNumber,
+        communityWitnesses: data.communityWitnesses,
+        legalClearanceHash: data.legalClearanceHash,
+        coordinates: data.coordinates,
+        lga: data.lga,
+        state: data.state,
+        addressDesc: data.district,
+      }),
+    });
+
+    const appNum = `ANAGU-APP-${result.applicationId.slice(0, 8).toUpperCase()}`;
 
     const newApp: LandApplication = {
-      id: newId,
+      id: result.applicationId,
       applicationNumber: appNum,
       applicantName: data.applicantName || currentUser.name,
       applicantId: currentUser.id,
-      applicantPhone: data.applicantPhone || currentUser.phone || '+234 800 000 0000',
+      applicantPhone: data.applicantPhone || currentUser.phone || '',
       applicantEmail: data.applicantEmail || currentUser.email,
       tenureType: data.tenureType || 'Statutory',
-      state: data.state || 'Lagos',
-      lga: data.lga || 'Ikeja',
-      district: data.district || 'Central Business District',
+      state: data.state || '',
+      lga: data.lga || '',
+      district: data.district || '',
       landUse: data.landUse || 'Residential',
-      estimatedAreaSqm: data.estimatedAreaSqm || 1200,
+      estimatedAreaSqm: data.estimatedAreaSqm || 0,
       northNeighbor: data.northNeighbor,
       southNeighbor: data.southNeighbor,
       eastNeighbor: data.eastNeighbor,
@@ -214,37 +309,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lastUpdated: new Date().toISOString().substring(0, 10),
       attestationsCount: 0,
       requiredAttestations: 4,
-      notes: data.notes || 'Application logged via Citizen Portal. Pending cadastral surveyor dispatch.',
-      documents: data.documents || [
-        { name: 'Deed_of_Conveyance.pdf', type: 'application/pdf', size: '2.1 MB', uploadedAt: new Date().toISOString().substring(0, 10) },
-        { name: 'Survey_Beacon_Receipt.pdf', type: 'application/pdf', size: '850 KB', uploadedAt: new Date().toISOString().substring(0, 10) }
-      ]
+      notes: `Spatial verification passed. Parcel ${result.parcelId} is recorded for ownership and legal review.`,
+      documents: [],
     };
 
     setApplications(prev => [newApp, ...prev]);
-
-    // Create a new survey job
-    const newJob: SurveyJob = {
-      id: `job-${Date.now()}`,
-      jobCode: `SRV-JOB-2026-${Math.floor(100 + Math.random() * 900)}`,
-      parcelId: newId,
-      applicantName: newApp.applicantName,
-      location: `${newApp.district}, ${newApp.lga}, ${newApp.state}`,
-      landUse: newApp.landUse,
-      estimatedAreaSqm: newApp.estimatedAreaSqm,
-      scheduledDate: new Date(Date.now() + 86400000 * 3).toISOString().substring(0, 10),
-      status: 'pending'
-    };
-    setSurveyJobs(prev => [newJob, ...prev]);
-
-    logAuditEvent('TITLE_APPLICATION_SUBMITTED', newId, 'Application', `Applicant ${newApp.applicantName} filed ${appNum}`);
     addNotification({
-      title: 'Application Lodged',
-      message: `Your land application ${appNum} has been received and queued for surveyor assignment.`,
+      title: 'Spatial Verification Passed',
+      message: `Application ${appNum} is recorded. Ownership and legal review are still required.`,
       type: 'success'
     });
 
-    return newId;
+    return result;
   };
 
   const updateApplicationStatus = (appId: string, newStatus: LandApplication['status'], notes?: string) => {
@@ -529,6 +605,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentRole,
         setCurrentRole,
         currentUser,
+        isAuthenticated,
+        authLoading,
         parcels,
         applications,
         transactions,

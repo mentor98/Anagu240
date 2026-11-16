@@ -1,4 +1,6 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable, Logger, NotFoundException, BadRequestException, ServiceUnavailableException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -18,6 +20,7 @@ const LAND_TITLE_NFT_ABI = [
   'function revoke(uint256 tokenId, uint8 ground) external',
   'function isRevoked(uint256 tokenId) external view returns (bool)',
   'function ownerOf(uint256 tokenId) external view returns (address)',
+  'function tokenURI(uint256 tokenId) external view returns (string)',
   'function totalSupply() external view returns (uint256)',
   'event TitleRevoked(uint256 indexed tokenId, uint8 ground, address indexed revokedBy, uint256 timestamp)',
 ];
@@ -34,10 +37,9 @@ const LAND_TITLE_NFT_ABI = [
 export class BlockchainService {
   private readonly logger = new Logger(BlockchainService.name);
   private provider!: ethers.JsonRpcProvider;
-  private registrarWallet!: ethers.Wallet;
-  private governorWallet!: ethers.Wallet;
-  private landRegistry!: ethers.Contract;
-  private landTitleNFT!: ethers.Contract;
+  private registrarWallet?: ethers.Wallet;
+  private landRegistry?: ethers.Contract;
+  private landTitleNFT?: ethers.Contract;
 
   constructor(
     @InjectRepository(LandTitle)
@@ -50,18 +52,48 @@ export class BlockchainService {
   }
 
   private initialiseContracts() {
-    const rpcUrl = this.config.get<string>('BESU_RPC_URL', 'http://localhost:8545');
+    const rpcUrl = this.config.get<string>('SEPOLIA_RPC_URL')
+      ?? this.config.get<string>('BESU_RPC_URL', 'http://localhost:8545');
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
 
-    const deployerKey = this.config.get<string>('DEPLOYER_PRIVATE_KEY')!;
-    this.registrarWallet = new ethers.Wallet(deployerKey, this.provider);
+    const registrarKey = this.config.get<string>('REGISTRAR_PRIVATE_KEY')
+      ?? this.config.get<string>('DEPLOYER_PRIVATE_KEY');
+    const registryAddress = this.config.get<string>('LAND_REGISTRY_ADDRESS');
+    const nftAddress = this.config.get<string>('LAND_TITLE_NFT_ADDRESS');
 
-    const registryAddress = this.config.get<string>('LAND_REGISTRY_ADDRESS')!;
-    const nftAddress      = this.config.get<string>('LAND_TITLE_NFT_ADDRESS')!;
+    if (nftAddress && ethers.isAddress(nftAddress)) {
+      this.landTitleNFT = new ethers.Contract(nftAddress, LAND_TITLE_NFT_ABI, this.provider);
+    }
+    if (registrarKey && registryAddress && ethers.isAddress(registryAddress)) {
+      this.registrarWallet = new ethers.Wallet(registrarKey, this.provider);
+      this.landRegistry = new ethers.Contract(registryAddress, LAND_REGISTRY_ABI, this.registrarWallet);
+    }
+    this.logger.log(
+      this.landTitleNFT
+        ? `Blockchain read service initialised. NFT=${nftAddress}`
+        : 'Blockchain reads are unavailable until LAND_TITLE_NFT_ADDRESS is configured.',
+    );
+  }
 
-    this.landRegistry = new ethers.Contract(registryAddress, LAND_REGISTRY_ABI, this.registrarWallet);
-    this.landTitleNFT = new ethers.Contract(nftAddress, LAND_TITLE_NFT_ABI, this.registrarWallet);
-    this.logger.log(`Blockchain service initialised. Registry=${registryAddress}`);
+  private requireNft() {
+    if (!this.landTitleNFT) {
+      throw new ServiceUnavailableException(
+        'The NFT contract is not configured. Deploy it and set LAND_TITLE_NFT_ADDRESS.',
+      );
+    }
+    return this.landTitleNFT;
+  }
+
+  private requireRegistry() {
+    if (!this.landRegistry || !this.registrarWallet) {
+      throw new ServiceUnavailableException(
+        'Registry writes are not configured. Set the deployed registry address and a trusted registrar signer.',
+      );
+    }
+    return {
+      registry: this.landRegistry,
+      registrar: this.registrarWallet,
+    };
   }
 
   // ── Part A + B: Register title and issue NFT ──────────────────────────
@@ -77,6 +109,7 @@ export class BlockchainService {
     applicationId:  string;
     ownerUserId?:   string;
   }): Promise<{ tokenId: string; txHash: string; blockNumber: string }> {
+    const { registry, registrar } = this.requireRegistry();
     this.logger.log(`Issuing title for parcel ${params.parcelId}`);
 
     // Part A — validate against business rules
@@ -92,7 +125,7 @@ export class BlockchainService {
       ? params.spatialHash
       : '0x' + params.spatialHash;
 
-    const tx = await this.landRegistry.registerTitle(
+    const tx = await registry.registerTitle(
       params.ownerAddress,
       params.parcelId,
       spatialHashBytes,
@@ -103,7 +136,7 @@ export class BlockchainService {
     // Parse tokenId from RegistrationRecorded event
     const event = receipt.logs
       .map((log: any) => {
-        try { return this.landRegistry.interface.parseLog(log); } catch { return null; }
+        try { return registry.interface.parseLog(log); } catch { return null; }
       })
       .find((e: any) => e?.name === 'RegistrationRecorded');
 
@@ -130,8 +163,8 @@ export class BlockchainService {
       fromStatus:  null,
       toStatus:    'NFT_ISSUED',
       actorRole:   'REGISTRAR',
-      actorId:     this.registrarWallet.address,
-      actorAddress: this.registrarWallet.address,
+      actorId:     registrar.address,
+      actorAddress: registrar.address,
       metadata:    { tokenId, txHash: receipt.hash },
     });
 
@@ -157,9 +190,9 @@ export class BlockchainService {
   async revokeTitle(params: {
     tokenId:          string;
     ground:           0 | 1;
-    governorPrivKey:  string;  // Must hold GOVERNOR_ROLE on the contract
     requestedBy:      string;  // off-chain user ID for audit
   }): Promise<{ txHash: string; blockNumber: string; gasUsed: string; confirmationMs: number }> {
+    const nft = this.requireNft();
     this.logger.log(`Revoking title tokenId=${params.tokenId}, ground=${params.ground}`);
 
     const title = await this.titleRepo.findOne({
@@ -168,9 +201,14 @@ export class BlockchainService {
     if (!title) throw new NotFoundException(`Title tokenId=${params.tokenId} not found`);
     if (title.isRevoked) throw new BadRequestException('Title already revoked');
 
-    // Connect governor wallet
-    const governorWallet = new ethers.Wallet(params.governorPrivKey, this.provider);
-    const nftAsGovernor  = this.landTitleNFT.connect(governorWallet);
+    const governorKey = this.config.get<string>('GOVERNOR_PRIVATE_KEY');
+    if (!governorKey) {
+      throw new ServiceUnavailableException(
+        'Statutory revocation is not configured. Set the Governor signer only in the trusted backend environment.',
+      );
+    }
+    const governorWallet = new ethers.Wallet(governorKey, this.provider);
+    const nftAsGovernor = nft.connect(governorWallet);
 
     const start = Date.now();
     const tx = await (nftAsGovernor as any).revoke(BigInt(params.tokenId), params.ground);
@@ -231,11 +269,72 @@ export class BlockchainService {
     return this.titleRepo.findOne({ where: { tokenId } });
   }
 
+  async verifyPublicTitle(tokenId: string) {
+    if (!/^[1-9]\d*$/.test(tokenId)) {
+      throw new BadRequestException('Token ID must be a positive integer.');
+    }
+    const title = await this.getTitleByTokenId(tokenId);
+    if (!title) throw new NotFoundException(`Title tokenId=${tokenId} not found`);
+
+    const nft = this.requireNft();
+    const [chainOwner, isRevoked, tokenUri] = await Promise.all([
+      nft.ownerOf(BigInt(tokenId)),
+      nft.isRevoked(BigInt(tokenId)),
+      nft.tokenURI(BigInt(tokenId)),
+    ]);
+
+    return {
+      tokenId: title.tokenId,
+      parcelId: title.parcelId,
+      ownerAddress: chainOwner as string,
+      isRevoked: Boolean(isRevoked),
+      tokenUri: tokenUri as string,
+      issueTransaction: title.txHash,
+      issueBlock: title.blockNumber,
+      revocationTransaction: title.revocationTx,
+      chainId: (await this.provider.getNetwork()).chainId.toString(),
+    };
+  }
+
+  async listPublicTitles() {
+    const records = await this.titleRepo.manager.query(
+      `SELECT t.token_id AS "tokenId",
+              t.parcel_id AS "parcelId",
+              p.state,
+              p.lga,
+              p.address_desc AS "addressDesc",
+              ST_Y(ST_Centroid(p.geom)) AS latitude,
+              ST_X(ST_Centroid(p.geom)) AS longitude,
+              t.is_revoked AS "isRevoked",
+              t.issued_at AS "issuedAt"
+       FROM land_titles t
+       JOIN parcels p ON p.id = t.parcel_id
+       WHERE p.geom IS NOT NULL
+       ORDER BY t.issued_at DESC`,
+    );
+    return records.map((record: {
+      tokenId: string;
+      parcelId: string;
+      state: string | null;
+      lga: string | null;
+      addressDesc: string | null;
+      latitude: string | number;
+      longitude: string | number;
+      isRevoked: boolean;
+      issuedAt: Date;
+    }) => ({
+      ...record,
+      latitude: Number(record.latitude),
+      longitude: Number(record.longitude),
+    }));
+  }
+
   async getTitleByParcelId(parcelId: string): Promise<LandTitle | null> {
     return this.titleRepo.findOne({ where: { parcelId } });
   }
 
   async isRevoked(tokenId: string): Promise<boolean> {
-    return this.landTitleNFT.isRevoked(BigInt(tokenId));
+    const nft = this.requireNft();
+    return nft.isRevoked(BigInt(tokenId));
   }
 }

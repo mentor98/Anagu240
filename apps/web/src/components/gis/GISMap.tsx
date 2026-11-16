@@ -29,6 +29,7 @@ export default function GISMap({
   const mapRef       = useRef<unknown>(null);
   const polygonRef   = useRef<unknown>(null);
   const markersRef   = useRef<unknown[]>([]);
+  const drawModeRef  = useRef(mode === "draw");
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -60,13 +61,12 @@ export default function GISMap({
       L.control.zoom({ position: "bottomright" }).addTo(map);
 
       map.on("click", (e) => {
-        if ((mapRef.current as { _drawMode?: boolean })?._drawMode) {
+        if (drawModeRef.current) {
           onAddCoordinate([e.latlng.lat, e.latlng.lng]);
         }
       });
 
       (mapRef.current as unknown) = map;
-      (mapRef.current as Record<string, unknown>)._drawMode = false;
     });
 
     return () => {
@@ -80,8 +80,8 @@ export default function GISMap({
 
   // Update draw mode
   useEffect(() => {
+    drawModeRef.current = mode === "draw";
     if (!mapRef.current) return;
-    (mapRef.current as Record<string, unknown>)._drawMode = mode === "draw";
     const container = (mapRef.current as { getContainer: () => HTMLElement }).getContainer?.();
     if (container) {
       container.style.cursor = mode === "draw" ? "crosshair" : "";

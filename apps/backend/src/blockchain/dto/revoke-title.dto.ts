@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsIn, IsNumber, IsString } from 'class-validator';
+import { IsIn, IsNumber } from 'class-validator';
 
 export class RevokeTitleDto {
   @ApiProperty({
@@ -9,8 +9,4 @@ export class RevokeTitleDto {
   @IsNumber()
   @IsIn([0, 1])
   ground: 0 | 1;
-
-  @ApiProperty({ description: 'Governor wallet private key — must hold GOVERNOR_ROLE on contract' })
-  @IsString()
-  governorPrivateKey: string;
 }

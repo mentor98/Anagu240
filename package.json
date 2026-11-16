@@ -9,17 +9,24 @@
     "apps/mobile",
     "contracts"
   ],
+  "dependencies": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
   "scripts": {
     "install:all":   "npm install --workspaces --if-present",
     "backend":       "npm run start:dev --workspace=apps/backend",
-    "web":           "npm run dev --workspace=apps/web",
-    "build":         "npm run build --workspace=apps/backend && npm run build --workspace=apps/web",
+    "web":           "node ./scripts/start-web.cjs",
+    "db:init":       "bash ./scripts/apply-db-schema.sh",
+    "build":         "npm run build --workspace=apps/backend && npm --prefix apps/anugu2 run build",
+    "build:next":    "npm run build --workspace=apps/web",
     "test":          "npm run test --workspace=apps/backend --workspace=contracts",
     "test:backend":  "npm run test --workspace=apps/backend",
     "test:contracts":"npm run test --workspace=contracts",
     "deploy:local":  "npm run deploy:local --workspace=contracts",
     "seed:local":    "npm run seed:local --workspace=contracts",
     "lint":          "npm run lint --workspace=apps/backend",
+    "lint:ui":       "npm --prefix apps/anugu2 run lint",
     "ev":            "npm run test --workspace=apps/backend -- --testPathPattern=evaluation --verbose --runInBand",
     "component4":    "npm run test --workspace=apps/backend -- --testPathPattern=evaluation --verbose --runInBand",
     "fraud":         "npm run test --workspace=apps/backend -- --testPathPattern=fraud-scenarios --verbose --runInBand",

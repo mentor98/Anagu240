@@ -111,9 +111,10 @@ export class ParcelsService {
   // ── PATCH /applications/:id/approve ──────────────────────────────────────
   async approveApplication(applicationId: string, registrarId: string): Promise<Application> {
     const app = await this.findApplicationById(applicationId);
-    if (!['OWNERSHIP_VERIFIED', 'LEGAL_VERIFIED', 'SPATIAL_VERIFIED'].includes(app.status)) {
+    if (app.status !== 'LEGAL_VERIFIED') {
       throw new BadRequestException(`Cannot approve application in status: ${app.status}`);
     }
+    const previousStatus = app.status;
     app.status      = 'APPROVED';
     app.registrarId = registrarId;
     app.approvedAt  = new Date();
@@ -121,7 +122,7 @@ export class ParcelsService {
 
     await this.auditService.log({
       entityType: 'application', entityId: app.id,
-      eventType: 'APPROVED', fromStatus: app.status, toStatus: 'APPROVED',
+      eventType: 'APPROVED', fromStatus: previousStatus, toStatus: 'APPROVED',
       actorRole: 'REGISTRAR', actorId: registrarId,
     });
     await this.mqttService.publishApproved(app.id, registrarId);

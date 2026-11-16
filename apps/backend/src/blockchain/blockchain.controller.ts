@@ -38,7 +38,6 @@ export class BlockchainController {
     return this.blockchainService.revokeTitle({
       tokenId,
       ground:         dto.ground,
-      governorPrivKey: dto.governorPrivateKey,
       requestedBy:    req.user.id,
     });
   }

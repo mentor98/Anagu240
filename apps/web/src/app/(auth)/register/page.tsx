@@ -1,7 +1,7 @@
 "use client";
 /**
  * A02 — Create Account
- * Registers via Supabase then immediately signs in — no email confirmation needed in dev.
+ * Creates confirmed Supabase Auth accounts without sending confirmation email.
  */
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -13,7 +13,6 @@ import {
   Eye, EyeOff, Loader2, Landmark, AlertCircle,
   User, Hammer, ChevronLeft, CheckCircle2,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 
 const stepTwoSchema = z.object({
   fullName:        z.string().min(2, "Full name is required"),
@@ -56,7 +55,6 @@ export default function RegisterPage() {
   const [showPw, setShowPw]           = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [infoMsg, setInfoMsg]         = useState<string | null>(null);
 
   const {
     register, handleSubmit, watch,
@@ -72,44 +70,28 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: StepTwoData) => {
     setServerError(null);
-    setInfoMsg(null);
     try {
-      // 1. Sign up
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email:    data.email.trim().toLowerCase(),
-        password: data.password,
-        options:  {
-          data: { full_name: data.fullName, phone: data.phone, role },
-        },
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: data.email.trim().toLowerCase(),
+          password: data.password,
+          fullName: data.fullName,
+          phone: data.phone,
+          role,
+        }),
       });
-      if (signUpError) throw signUpError;
-
-      // 2. Auto-confirm via our server-side API so no email click needed
-      if (signUpData?.user?.id) {
-        await fetch("/api/auth/confirm", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ userId: signUpData.user.id }),
-        });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error ?? "Account creation failed.");
       }
 
-      // 3. Sign in immediately
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email:    data.email.trim().toLowerCase(),
-        password: data.password,
-      });
-
-      if (signInError) {
-        // Fallback: guide them to login page
-        router.push("/login?registered=1");
-        return;
-      }
-
-      router.push("/dashboard");
+      router.replace("/login?registered=1");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Registration failed";
-      if (msg.includes("already registered") || msg.includes("already been registered")) {
-        setServerError("An account with this email already exists. Try signing in instead.");
+      if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("network")) {
+        setServerError("Unable to reach the authentication service. Check your connection and try again.");
       } else {
         setServerError(msg);
       }
@@ -361,19 +343,18 @@ export default function RegisterPage() {
                   )}
                 </div>
 
-                {/* Info message (email confirmation needed) */}
-                {infoMsg && (
-                  <div className="flex items-start gap-2 rounded-xl bg-[#13C98A]/10 border border-[#13C98A]/30 p-3">
-                    <CheckCircle2 size={16} className="text-[#13C98A] shrink-0 mt-0.5" />
-                    <p className="text-sm text-[#13C98A]">{infoMsg}</p>
-                  </div>
-                )}
-
                 {/* Error */}
                 {serverError && (
                   <div className="flex items-start gap-2 rounded-xl bg-[#EF4444]/10 border border-[#EF4444]/30 p-3">
                     <AlertCircle size={16} className="text-[#EF4444] shrink-0 mt-0.5" />
-                    <p className="text-sm text-[#EF4444]">{serverError}</p>
+                    <div className="text-sm text-[#EF4444]">
+                      <p>{serverError}</p>
+                      {serverError.includes("already exists") && (
+                        <Link href="/login" className="mt-1 inline-block underline underline-offset-2">
+                          Go to sign in
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 )}
 

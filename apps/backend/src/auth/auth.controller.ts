@@ -14,7 +14,7 @@ export class AuthController {
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(
       dto.email, dto.password, dto.fullName,
-      dto.role, dto.nationalId, dto.walletAddress,
+      dto.nationalId, dto.walletAddress,
     );
   }
 

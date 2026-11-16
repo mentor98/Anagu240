@@ -1,68 +1,97 @@
-/**
- * ANAGU — Supabase client for the anugu2 Vite app
- * Project: https://wcykxpsbtbsoxxmitslk.supabase.co
- */
-import { createClient } from "@supabase/supabase-js";
+import { publicApiRequest } from "./api";
 
-export const SUPABASE_URL  = "https://wcykxpsbtbsoxxmitslk.supabase.co";
-export const SUPABASE_ANON = "sb_publishable_MwJtKiIDQB-46QhW1xvkXA_Lh_apL1j";
+const AUTH_STORAGE_KEY = "anagu.auth";
+const AUTH_CHANGE_EVENT = "anagu-auth-change";
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
-
-/** Auto-confirm via Next.js API (runs alongside this app on port 3001) */
-async function autoConfirm(userId: string): Promise<void> {
-  try {
-    await fetch("http://localhost:3001/api/auth/confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
-  } catch { /* Next.js not running — email confirmation will be sent */ }
+export interface AuthUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  nationalId?: string | null;
+  walletAddress?: string | null;
 }
 
-/** Sign up → auto-confirm → sign in (no email click needed) */
+interface AuthResult {
+  accessToken: string;
+  user: AuthUser;
+}
+
+function saveAuth(result: AuthResult): void {
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(result));
+  window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+}
+
+export function getAuth(): AuthResult | null {
+  const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored) as AuthResult;
+  } catch {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    return null;
+  }
+}
+
+export function subscribeToAuth(callback: () => void): () => void {
+  window.addEventListener(AUTH_CHANGE_EVENT, callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    window.removeEventListener(AUTH_CHANGE_EVENT, callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
+/** Create a local API account and immediately persist its JWT session. */
 export async function signUpAndIn(
   email: string,
   password: string,
   meta: Record<string, unknown>
 ): Promise<{ error: string | null }> {
-  const { data, error: e1 } = await supabase.auth.signUp({
-    email: email.trim().toLowerCase(),
-    password,
-    options: { data: meta },
-  });
-  if (e1) return { error: e1.message };
-  if (data.user?.id) await autoConfirm(data.user.id);
-  const { error: e2 } = await supabase.auth.signInWithPassword({
-    email: email.trim().toLowerCase(), password,
-  });
-  if (e2) return { error: "Account created! Check email to confirm, then sign in." };
-  return { error: null };
+  try {
+    const result = await publicApiRequest<AuthResult>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        password,
+        fullName: String(meta.full_name ?? ""),
+        nationalId: String(meta.nin ?? "") || undefined,
+      }),
+    });
+    saveAuth(result);
+    return { error: null };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Account registration failed." };
+  }
 }
 
-/** Sign in with email + password */
+/** Sign in with email + password without requiring an email confirmation. */
 export async function signIn(
   email: string, password: string
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase.auth.signInWithPassword({
-    email: email.trim().toLowerCase(), password,
-  });
-  if (!error) return { error: null };
-  const msg = error.message.toLowerCase();
-  if (msg.includes("invalid") || msg.includes("credentials")) {
-    return { error: "Incorrect email or password." };
+  try {
+    const result = await publicApiRequest<AuthResult>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+    });
+    saveAuth(result);
+    return { error: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Sign-in failed.";
+    const normalized = message.toLowerCase();
+    return {
+      error: normalized.includes("unauthorized") || normalized.includes("401")
+        ? "Incorrect email or password."
+        : message,
+    };
   }
-  if (msg.includes("confirm") || msg.includes("not confirmed")) {
-    return { error: "Email not confirmed — check your inbox or use password: Anagu2026!" };
-  }
-  return { error: error.message };
 }
 
-export const signOut = () => supabase.auth.signOut();
-export const getSession = () => supabase.auth.getSession().then(r => r.data.session);
+export function signOut(): void {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+}
+
+export async function sendPasswordReset(): Promise<{ error: Error | null }> {
+  return { error: new Error("Password recovery is not configured. Contact the Anagu administrator.") };
+}

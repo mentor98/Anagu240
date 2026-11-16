@@ -7,6 +7,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
+import { keccak256, toUtf8Bytes } from 'ethers';
 import {
   SpatialVerificationService,
   type Coordinate,
@@ -26,9 +27,7 @@ function setupValidParcel(mockDs: { query: jest.Mock }) {
     // Call 1 — ST_IsValid check → valid
     .mockResolvedValueOnce([{ is_valid: true, reason: null }])
     // Call 2 — overlap check → no overlap
-    .mockResolvedValueOnce([])
-    // Call 3 — spatial hash
-    .mockResolvedValueOnce([{ hash: 'aabbccdd1122334455667788990011223344556677889900112233445566778899' }]);
+    .mockResolvedValueOnce([]);
 }
 
 describe('SpatialVerificationService', () => {
@@ -227,10 +226,18 @@ describe('SpatialVerificationService', () => {
       expect(result.wkt).toMatch(/^POLYGON/);
     });
 
-    it('runs exactly 3 DB queries for a valid parcel', async () => {
+    it('runs exactly 2 DB queries for a valid parcel', async () => {
       setupValidParcel(mockDataSource);
       await service.verifyParcel(validRectangle);
-      expect(mockDataSource.query).toHaveBeenCalledTimes(3);
+      expect(mockDataSource.query).toHaveBeenCalledTimes(2);
+    });
+
+    it('returns the keccak256 hash of the WKT sent to the registry contract', async () => {
+      setupValidParcel(mockDataSource);
+      const result = await service.verifyParcel(validRectangle);
+      expect(result.spatialHash).toBe(
+        keccak256(toUtf8Bytes(service.coordinatesToWKT(validRectangle))),
+      );
     });
   });
 });

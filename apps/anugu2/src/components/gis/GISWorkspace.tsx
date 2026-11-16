@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { Parcel, Coordinate } from '../../types';
 import {
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 import { BackButton } from '../common/BackButton';
 import { CadastreGoogleMap } from './CadastreGoogleMap';
+import { apiRequest } from '../../lib/api';
 
 interface DrawnPoint {
   x: number;
@@ -45,23 +47,17 @@ export const GISWorkspace: React.FC = () => {
   } | null>(null);
 
   // Drawing mode state
-  const [drawnPoints, setDrawnPoints] = useState<DrawnPoint[]>([
-    { x: 220, y: 140, lat: 6.4382, lng: 3.4715, name: 'BC-01' },
-    { x: 380, y: 150, lat: 6.4389, lng: 3.4721, name: 'BC-02' },
-    { x: 360, y: 310, lat: 6.4384, lng: 3.4728, name: 'BC-03' },
-    { x: 200, y: 290, lat: 6.4377, lng: 3.4722, name: 'BC-04' }
-  ]);
+  const [drawnPoints, setDrawnPoints] = useState<DrawnPoint[]>([]);
 
   // Coordinate entry input state
-  const [manualLat, setManualLat] = useState('6.439500');
-  const [manualLng, setManualLng] = useState('3.473500');
-  const [manualBeacon, setManualBeacon] = useState('BC-05');
+  const [manualLat, setManualLat] = useState('');
+  const [manualLng, setManualLng] = useState('');
+  const [manualBeacon, setManualBeacon] = useState('');
 
   // Topological Verification state
   const [isVerifying, setIsVerifying] = useState(false);
-  const [testScenario, setTestScenario] = useState<'pass' | 'invalid_geom' | 'overlap'>('pass');
   const [verificationResult, setVerificationResult] = useState<{
-    status: 'passed' | 'overlap_detected' | 'invalid_geometry';
+    status: 'passed' | 'overlap_detected' | 'invalid_geometry' | 'error';
     overlapAreaSqm: number;
     encroachingVertices: string[];
     sqlQuery: string;
@@ -71,8 +67,8 @@ export const GISWorkspace: React.FC = () => {
 
   // Survey Submission Modal / Form state
   const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [surveyPlanNumber, setSurveyPlanNumber] = useState(`LA/SRV/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`);
-  const [surveyNotes, setSurveyNotes] = useState('Differential GPS boundary beacon traverse completed with closure error 1:25,000.');
+  const [surveyPlanNumber, setSurveyPlanNumber] = useState('');
+  const [surveyNotes, setSurveyNotes] = useState('');
 
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -136,44 +132,56 @@ export const GISWorkspace: React.FC = () => {
     ]);
   };
 
-  const runTopologicalVerification = (overrideScenario?: 'pass' | 'invalid_geom' | 'overlap') => {
-    const target = overrideScenario || testScenario;
+  const runTopologicalVerification = async () => {
     setIsVerifying(true);
-    setTimeout(() => {
-      setIsVerifying(false);
+    const startedAt = performance.now();
+    try {
+      const result = await apiRequest<{
+        valid: boolean;
+        reason?: 'INVALID_GEOMETRY' | 'OVERLAPPING_PARCEL' | 'INSUFFICIENT_COORDINATES';
+        overlappingParcelId?: string;
+        diagnosticMessage?: string;
+        spatialHash?: string;
+        wkt?: string;
+      }>('/gis/verify', {
+        method: 'POST',
+        body: JSON.stringify({
+          coordinates: drawnPoints.map(({ lng, lat }) => [lng, lat]),
+        }),
+      });
 
-      if (target === 'overlap') {
-        setVerificationResult({
-          status: 'overlap_detected',
-          overlapAreaSqm: 84.5,
-          encroachingVertices: ['BC-02', 'BC-03'],
-          sqlQuery: `SELECT ST_Intersects(ST_Buffer(ST_GeomFromText('POLYGON(...)', 4326), 0.0000045), existing_parcels.geom) FROM cadastre_parcels;`,
-          latencyMs: 142,
-          message: 'Topological Encroachment (0.5m Buffer Violation): Proposed boundary intersects Title C-OF-O-2026-004912 by 84.5 m² at beacons BC-02 and BC-03.'
-        });
-        setShowOverlaps(true);
-      } else if (target === 'invalid_geom') {
-        setVerificationResult({
-          status: 'invalid_geometry',
-          overlapAreaSqm: 0,
-          encroachingVertices: ['BC-02', 'BC-04'],
-          sqlQuery: `SELECT ST_IsValid(ST_GeomFromText('POLYGON(...)', 4326)), ST_IsValidReason(geom);`,
-          latencyMs: 98,
-          message: 'Invalid Geometry (ST_IsValid = False): Self-intersecting polygon edge detected between BC-02 and BC-04 (non-simple boundary loop).'
-        });
-        setShowOverlaps(false);
-      } else {
-        setVerificationResult({
-          status: 'passed',
-          overlapAreaSqm: 0,
-          encroachingVertices: [],
-          sqlQuery: `SELECT ST_IsValid(geom) AND NOT ST_Intersects(ST_Buffer(geom, 0.5), others.geom) FROM cadastre_parcels;`,
-          latencyMs: 138,
-          message: 'Topological Integrity Verified: ST_IsValid=TRUE, 100% loop closure, zero boundary encroachments within 0.5m buffer tolerance.'
-        });
-        setShowOverlaps(false);
-      }
-    }, 700);
+      const status = result.valid
+        ? 'passed'
+        : result.reason === 'OVERLAPPING_PARCEL'
+          ? 'overlap_detected'
+          : 'invalid_geometry';
+      setVerificationResult({
+        status,
+        overlapAreaSqm: 0,
+        encroachingVertices: [],
+        sqlQuery: result.spatialHash
+          ? `PostGIS validation passed; keccak256 spatial hash: ${result.spatialHash}`
+          : `PostGIS rejected the polygon: ${result.reason ?? 'unknown validation error'}`,
+        latencyMs: Math.round(performance.now() - startedAt),
+        message: result.diagnosticMessage
+          ?? (result.valid
+            ? 'Geometry is valid and does not overlap a registered parcel.'
+            : `Spatial verification failed: ${result.reason ?? 'Unknown reason'}.`),
+      });
+      setShowOverlaps(status === 'overlap_detected');
+    } catch (error) {
+      setVerificationResult({
+        status: 'error',
+        overlapAreaSqm: 0,
+        encroachingVertices: [],
+        sqlQuery: 'No database result was returned.',
+        latencyMs: Math.round(performance.now() - startedAt),
+        message: error instanceof Error ? error.message : 'Spatial verification failed.',
+      });
+      setShowOverlaps(false);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   // Calculate polygon perimeter and area
@@ -216,6 +224,18 @@ export const GISWorkspace: React.FC = () => {
 
   // Convert points to SVG polygon points string
   const polygonPoints = drawnPoints.map(p => `${p.x},${p.y}`).join(' ');
+
+  if (!selectedParcel) {
+    return (
+      <div className="space-y-4 rounded-lg border border-slate-200 p-6 text-slate-700 dark:border-slate-700 dark:text-slate-300">
+        <h1 className="text-lg font-semibold">GIS workspace</h1>
+        <p className="text-sm">No parcel records are available to inspect yet.</p>
+        <Link to="/portal/register-land" className="inline-flex rounded-md bg-[#3D288C] px-4 py-2 text-sm font-medium text-white">
+          Register a parcel
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 flex flex-col">
@@ -739,60 +759,15 @@ export const GISWorkspace: React.FC = () => {
                 </span>
               </div>
 
-              {/* Diagnostic Test Scenario Selectors */}
-              <div className="space-y-1.5">
-                <span className="text-[11px] text-slate-400 block font-medium">Simulate PostGIS Verification Scenarios:</span>
-                <div className="grid grid-cols-3 gap-1.5 text-[11px]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTestScenario('pass');
-                      runTopologicalVerification('pass');
-                    }}
-                    className={`py-1.5 px-2 rounded-lg font-semibold transition-colors border ${
-                      testScenario === 'pass'
-                        ? 'bg-emerald-600 text-white border-emerald-500'
-                        : 'bg-[#0d122e] text-slate-400 border-slate-700 hover:text-white'
-                    }`}
-                  >
-                    1. Valid Pass
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTestScenario('overlap');
-                      runTopologicalVerification('overlap');
-                    }}
-                    className={`py-1.5 px-2 rounded-lg font-semibold transition-colors border ${
-                      testScenario === 'overlap'
-                        ? 'bg-rose-600 text-white border-rose-500'
-                        : 'bg-[#0d122e] text-slate-400 border-slate-700 hover:text-white'
-                    }`}
-                  >
-                    2. Overlap
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTestScenario('invalid_geom');
-                      runTopologicalVerification('invalid_geom');
-                    }}
-                    className={`py-1.5 px-2 rounded-lg font-semibold transition-colors border ${
-                      testScenario === 'invalid_geom'
-                        ? 'bg-amber-600 text-white border-amber-500'
-                        : 'bg-[#0d122e] text-slate-400 border-slate-700 hover:text-white'
-                    }`}
-                  >
-                    3. Invalid Loop
-                  </button>
-                </div>
-              </div>
+              <p className="text-[11px] text-slate-400">
+                Submits the polygon to the authenticated PostGIS service; outcomes are not simulated.
+              </p>
 
               {isVerifying ? (
                 <div className="py-8 text-center space-y-3">
                   <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin mx-auto" />
                   <p className="text-xs text-slate-300">
-                    Executing PostGIS ST_IsValid() & ST_Intersects(buffer=0.5m) against 48,290 cadastre parcels...
+                    Executing PostGIS geometry and overlap validation…
                   </p>
                 </div>
               ) : verificationResult ? (
@@ -801,7 +776,7 @@ export const GISWorkspace: React.FC = () => {
                     className={`p-4 rounded-xl border text-xs space-y-2 ${
                       verificationResult.status === 'overlap_detected'
                         ? 'bg-rose-950/30 border-rose-500/40 text-rose-200'
-                        : verificationResult.status === 'invalid_geometry'
+                        : verificationResult.status === 'invalid_geometry' || verificationResult.status === 'error'
                         ? 'bg-amber-950/30 border-amber-500/40 text-amber-200'
                         : 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
                     }`}
@@ -813,10 +788,14 @@ export const GISWorkspace: React.FC = () => {
                             <AlertTriangle className="w-4 h-4 text-rose-400" />
                             <span>OUTCOME 3: OVERLAPPING PARCEL DETECTED</span>
                           </>
-                        ) : verificationResult.status === 'invalid_geometry' ? (
+                        ) : verificationResult.status === 'invalid_geometry' || verificationResult.status === 'error' ? (
                           <>
                             <AlertTriangle className="w-4 h-4 text-amber-400" />
-                            <span>OUTCOME 2: INVALID GEOMETRY (ST_IsValid=FALSE)</span>
+                            <span>
+                              {verificationResult.status === 'error'
+                                ? 'VERIFICATION SERVICE UNAVAILABLE'
+                                : 'INVALID GEOMETRY (ST_IsValid=FALSE)'}
+                            </span>
                           </>
                         ) : (
                           <>
@@ -849,13 +828,15 @@ export const GISWorkspace: React.FC = () => {
                   </div>
 
                   {/* Submission Action */}
-                  <button
-                    onClick={() => setShowSubmitModal(true)}
-                    className="w-full py-2.5 rounded-xl bg-[#6338F5] hover:bg-[#5229db] text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-md flex items-center justify-center gap-2"
-                  >
-                    <FileCheck className="w-4 h-4" />
-                    <span>Lodge Cadastral Survey Plan</span>
-                  </button>
+                  {verificationResult.status === 'passed' && (
+                    <button
+                      onClick={() => setShowSubmitModal(true)}
+                      className="w-full py-2.5 rounded-xl bg-[#6338F5] hover:bg-[#5229db] text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-md flex items-center justify-center gap-2"
+                    >
+                      <FileCheck className="w-4 h-4" />
+                      <span>Lodge Cadastral Survey Plan</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="py-4 text-center text-xs text-slate-400">

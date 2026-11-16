@@ -15,29 +15,46 @@ git clone <repo-url> anagu && cd anagu
 
 # 2. Copy environment config
 cp .env.example .env
-# Edit .env — at minimum, review all passwords and keys
+# Edit .env — review local service passwords and backend settings
+cp apps/anugu2/.env.example apps/anugu2/.env
+# The supplied app uses local API authentication and OpenStreetMap; no browser keys are needed
 
-# 3. Start all infrastructure services
+# 3. Install the monorepo workspaces
+npm install
+cd apps/anugu2 && npm install && cd ../..
+
+# 4. Start local infrastructure (Postgres, Redis, MQTT, Besu, MinIO)
 docker compose up -d
 
-# 4. Confirm all services are healthy
+# 5. Confirm services are healthy
 docker compose ps
 
-# 5. Run database migrations (from backend)
-cd apps/backend && npm install && npm run migration:run
+# 6. Apply the Postgres/PostGIS schema to the configured database
+npm run db:init
+# or: make db-init
 
-# 6. Deploy smart contracts (from contracts/)
-cd ../../contracts && npm install && npx hardhat run scripts/deploy.ts --network besu_local
+# 7. In separate terminals, start the API and supplied AI Studio frontend
+npm run backend
+npm run web
 
-# 7. Start the backend
-cd ../apps/backend && npm run start:dev
-
-# 8. Start the web frontend
-cd ../web && npm install && npm run dev
-
-# 9. Start the mobile app (requires Expo Go on device or emulator)
-cd ../mobile && npm install && npx expo start
+# 8. Deploy contracts after configuring the local Besu account
+npm run deploy:local
 ```
+
+The supplied Google AI Studio UI lives in `apps/anugu2` and is served at
+http://localhost:3000 by `npm run web`. The NestJS API serves on
+http://localhost:3001 and Swagger is at http://localhost:3001/api/docs.
+`apps/web` is a separate Next.js implementation and is not the default web app.
+There is no mobile workspace in this checkout.
+
+The local database schema is loaded by PostgreSQL's init scripts only when its data
+volume is first created. The Supabase migration is separate and must be applied to the
+intended Supabase project after reviewing its current schema.
+
+The supplied Vite UI registers and signs in through the NestJS API; email confirmation
+is not required. Its session is a backend JWT. OpenStreetMap powers public parcel
+exploration without a browser API key. Supabase remains optional for other integrations;
+never expose `SUPABASE_SECRET_KEY` in browser configuration.
 
 ---
 
@@ -46,16 +63,18 @@ cd ../mobile && npm install && npx expo start
 The complete build guide, architecture, component specs, API reference, database schema,
 test procedures, and results tables are in:
 
-**[PROJECT.md](./PROJECT.md)**
+**[spec.md](./spec.md)** is the current acceptance checklist. **[PROJECT.md](./PROJECT.md)**
+and **[Anagu_Complete_Build_and_Test_Guide.pdf](./Anagu_Complete_Build_and_Test_Guide.pdf)**
+contain the full reference specification.
 
-Read `PROJECT.md` first. Everything is there.
+Use `spec.md` to see which PDF requirements are implemented and verified.
 
 ---
 
 ## Architecture
 
 ```
-Next.js (web) + React Native/Expo (mobile)
+Supplied Vite / React UI (web)
             ↓
         NestJS Backend
     ┌───────────────────────┐
@@ -88,8 +107,8 @@ PostgreSQL   Hyperledger  EMQX
 
 | Layer | Technology |
 |-------|-----------|
-| Web | Next.js 14 |
-| Mobile | React Native / Expo |
+| Web | Vite + React (Google AI Studio supplied UI) |
+| Additional web implementation | Next.js 14 (`apps/web`, not the default entrypoint) |
 | Backend | NestJS (Node.js / TypeScript) |
 | Database | PostgreSQL 15 + PostGIS 3 |
 | Blockchain | Hyperledger Besu (PoA-QBFT-DPoS) |
@@ -106,8 +125,8 @@ PostgreSQL   Hyperledger  EMQX
 ```
 monorepo/
 ├── apps/
-│   ├── web/          # Next.js portal
-│   ├── mobile/       # React Native (Expo) field app
+│   ├── anugu2/       # Supplied Google AI Studio Vite UI
+│   ├── web/          # Additional Next.js portal
 │   └── backend/      # NestJS API
 ├── contracts/        # Solidity smart contracts
 ├── infra/besu/       # Hyperledger Besu config

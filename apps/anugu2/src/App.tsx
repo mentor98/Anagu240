@@ -1,11 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { APIProvider } from '@vis.gl/react-google-maps';
+import React, { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
-import { getGoogleMapsApiKey } from './components/gis/CadastreGoogleMap';
 
 // Common Components
-import { SimulationBanner } from './components/common/SimulationBanner';
 import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
 import { Footer } from './components/common/Footer';
@@ -14,6 +11,7 @@ import { NFTCertificateModal } from './components/blockchain/NFTCertificateModal
 // Public Pages
 import { LandingPage } from './components/public/LandingPage';
 import { PublicVerifyPage } from './components/public/PublicVerifyPage';
+import { ExploreLandPage } from './components/public/ExploreLandPage';
 import { AboutPage } from './components/public/AboutPage';
 import { FeaturesPage } from './components/public/FeaturesPage';
 import { HowItWorksPage } from './components/public/HowItWorksPage';
@@ -58,9 +56,6 @@ import { SettingsView } from './components/shared/SettingsView';
 import { HelpFAQView } from './components/shared/HelpFAQView';
 import { NotFoundView } from './components/shared/NotFoundView';
 
-// Animations
-import { CadastreBlockchainCanvas } from './components/animations/CadastreBlockchainCanvas';
-
 // Dynamic Role Dashboard Dispatcher
 const RoleDashboardDispatcher: React.FC = () => {
   const { currentRole } = useApp();
@@ -82,49 +77,36 @@ const RoleDashboardDispatcher: React.FC = () => {
   }
 };
 
-const AppLayout: React.FC = () => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [mapsQuotaExceeded, setMapsQuotaExceeded] = useState(false);
-  const { selectedCertificateParcel, setSelectedCertificateParcel, theme } = useApp();
+const RequireAuth: React.FC = () => {
+  const { authLoading, isAuthenticated } = useApp();
   const location = useLocation();
 
-  useEffect(() => {
-    const handleQuotaExceeded = () => setMapsQuotaExceeded(true);
-    window.addEventListener('gmp-quota-exceeded', handleQuotaExceeded);
-    return () => window.removeEventListener('gmp-quota-exceeded', handleQuotaExceeded);
-  }, []);
+  if (authLoading) {
+    return <div className="min-h-screen grid place-items-center text-sm">Restoring your secure session…</div>;
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/auth/login" replace state={{ from: location.pathname }} />;
+  }
+  return <Outlet />;
+};
+
+const RequireRole: React.FC<{ roles: string[]; children: React.ReactNode }> = ({ roles, children }) => {
+  const { currentRole } = useApp();
+  return roles.includes(currentRole)
+    ? <>{children}</>
+    : <Navigate to="/auth/access-denied" replace />;
+};
+
+const AppLayout: React.FC = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { selectedCertificateParcel, setSelectedCertificateParcel } = useApp();
+  const location = useLocation();
 
   const isPortal = location.pathname.startsWith('/portal');
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F4F6FB] dark:bg-[#080D24] text-slate-900 dark:text-slate-100 font-sans selection:bg-[#6338F5] selection:text-white relative transition-colors duration-200">
-      {/* 0. Global Cadastre / Blockchain / NFT Animated Background Canvas */}
-      <CadastreBlockchainCanvas theme={theme} />
-
-      {/* Google Maps Demo Quota Notice (Case A) */}
-      {mapsQuotaExceeded && (
-        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
-          <span>
-            Google Maps Platform quota reached. If you are the app owner, visit{' '}
-            <a
-              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline font-semibold text-amber-950 hover:text-amber-800"
-            >
-              maps developer site
-            </a>{' '}
-            for instructions to update your account.
-          </span>
-        </div>
-      )}
-
-      {/* 1. Global Simulation Banner */}
-      <div className="relative z-20">
-        <SimulationBanner />
-      </div>
-
-      {/* 2. Top Navigation Bar */}
+      {/* Top Navigation Bar */}
       <Header
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         isSidebarOpen={isSidebarOpen}
@@ -150,6 +132,7 @@ const AppLayout: React.FC = () => {
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/verify" element={<PublicVerifyPage />} />
+            <Route path="/explore" element={<ExploreLandPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/features" element={<FeaturesPage />} />
             <Route path="/how-it-works" element={<HowItWorksPage />} />
@@ -161,6 +144,7 @@ const AppLayout: React.FC = () => {
             <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/auth/access-denied" element={<AccessDeniedPage />} />
 
+            <Route element={<RequireAuth />}>
             {/* Portal Root -> Dispatches by Active Role */}
             <Route path="/portal" element={<Navigate to="/portal/dashboard" replace />} />
             <Route path="/portal/dashboard" element={<RoleDashboardDispatcher />} />
@@ -185,11 +169,11 @@ const AppLayout: React.FC = () => {
             <Route path="/portal/community" element={<CommunityAttestationView />} />
 
             {/* Role-Specific Direct Routes */}
-            <Route path="/portal/surveyor/*" element={<SurveyorPortal />} />
-            <Route path="/portal/registrar/*" element={<RegistrarPortal />} />
-            <Route path="/portal/admin/*" element={<LandAdminPortal />} />
-            <Route path="/portal/governor/*" element={<GovernorPortal />} />
-            <Route path="/portal/sysadmin/*" element={<SysAdminPortal />} />
+            <Route path="/portal/surveyor/*" element={<RequireRole roles={['surveyor']}><SurveyorPortal /></RequireRole>} />
+            <Route path="/portal/registrar/*" element={<RequireRole roles={['registrar']}><RegistrarPortal /></RequireRole>} />
+            <Route path="/portal/admin/*" element={<RequireRole roles={['admin']}><LandAdminPortal /></RequireRole>} />
+            <Route path="/portal/governor/*" element={<RequireRole roles={['governor']}><GovernorPortal /></RequireRole>} />
+            <Route path="/portal/sysadmin/*" element={<RequireRole roles={['sysadmin']}><SysAdminPortal /></RequireRole>} />
 
             {/* Analytics & Monitoring */}
             <Route path="/portal/analytics" element={<AnalyticsView />} />
@@ -199,6 +183,7 @@ const AppLayout: React.FC = () => {
             <Route path="/portal/profile" element={<ProfileView />} />
             <Route path="/portal/settings" element={<SettingsView />} />
             <Route path="/portal/help" element={<HelpFAQView />} />
+            </Route>
 
             {/* Fallback 404 */}
             <Route path="*" element={<NotFoundView />} />
@@ -221,27 +206,11 @@ const AppLayout: React.FC = () => {
 };
 
 export default function App() {
-  const mapsApiKey = getGoogleMapsApiKey();
-  const content = (
+  return (
     <BrowserRouter>
       <AppProvider>
         <AppLayout />
       </AppProvider>
     </BrowserRouter>
-  );
-
-  if (!mapsApiKey) {
-    return content;
-  }
-
-  return (
-    <APIProvider
-      apiKey={mapsApiKey}
-      libraries={['marker', 'geometry']}
-      language="en"
-      region="NG"
-    >
-      {content}
-    </APIProvider>
   );
 }

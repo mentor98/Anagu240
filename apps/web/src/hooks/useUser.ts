@@ -36,7 +36,7 @@ export function useUser() {
 function mapUser(u: User): AppUser {
   const meta = u.user_metadata as Record<string, string> | undefined;
   return Object.assign(u, {
-    role:     (u.app_metadata as Record<string, string>)?.role ?? meta?.role ?? "CITIZEN",
+    role:     (u.app_metadata as Record<string, string>)?.role ?? "CITIZEN",
     fullName: meta?.full_name ?? meta?.fullName ?? u.email ?? "",
   }) as AppUser;
 }

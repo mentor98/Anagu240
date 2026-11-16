@@ -298,14 +298,28 @@ export const CadastreGoogleMap: React.FC<CadastreGoogleMapProps> = ({
     [interactiveDraw, onAddPoint]
   );
 
-  if (!apiKey) {
+  if (!apiKey || import.meta.env.VITE_MAP_PROVIDER !== 'google') {
+    const latitude = initialCenter.lat;
+    const longitude = initialCenter.lng;
+    const bbox = [
+      longitude - 0.02,
+      latitude - 0.02,
+      longitude + 0.02,
+      latitude + 0.02,
+    ].join(',');
     return (
-      <div className={`w-full ${heightClass} rounded-xl overflow-hidden border border-slate-800`}>
-        <CoordinateSchematicFallback
-          parcel={selectedParcel}
-          drawnPoints={drawnPoints}
-          reason="Google Maps API Key awaiting server reload"
+      <div className={`relative w-full ${heightClass} overflow-hidden rounded-xl border border-slate-800`}>
+        <iframe
+          title={`OpenStreetMap location for ${selectedParcel.titleNumber}`}
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${latitude},${longitude}`}
+          className="h-full w-full border-0"
+          loading="lazy"
+          referrerPolicy="no-referrer"
         />
+        <div className="absolute bottom-2 left-2 rounded bg-white/90 px-2 py-1 text-[10px] text-slate-700">
+          Map data © <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
+          {interactiveDraw && ' · Enter surveyed coordinates manually; map clicks are unavailable in the embedded map.'}
+        </div>
       </div>
     );
   }

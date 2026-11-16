@@ -17,7 +17,7 @@ export class MqttEvent {
   @Column({ type: 'smallint', default: 1 })
   qos: number;
 
-  @Column({ name: 'payload_bytes', nullable: true })
+  @Column({ name: 'payload_bytes', type: 'integer', nullable: true })
   payloadBytes: number | null;
 
   @Column({ default: false })
@@ -26,6 +26,6 @@ export class MqttEvent {
   @CreateDateColumn({ name: 'published_at' })
   publishedAt: Date;
 
-  @Column({ name: 'delivered_at', nullable: true })
+  @Column({ name: 'delivered_at', type: 'timestamptz', nullable: true })
   deliveredAt: Date | null;
 }

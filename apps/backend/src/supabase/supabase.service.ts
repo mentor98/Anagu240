@@ -60,15 +60,23 @@ export class SupabaseService implements OnModuleInit {
    * server-side against the JWKS endpoint:
    *   https://wcykxpsbtbsoxxmitslk.supabase.co/auth/v1/.well-known/jwks.json
    */
-  async verifyToken(token: string): Promise<{ id: string; email: string; role: string }> {
+  async verifyToken(token: string): Promise<{
+    id: string;
+    email: string;
+    role: string;
+    fullName: string;
+  }> {
     const { data, error } = await this.admin.auth.getUser(token);
     if (error || !data.user) {
       throw new Error(`Supabase JWT verification failed: ${error?.message}`);
     }
+    const role = String(data.user.app_metadata?.role ?? 'CITIZEN').toUpperCase();
+    const allowedRoles = ['CITIZEN', 'SURVEYOR', 'REGISTRAR', 'LAND_ADMINISTRATOR', 'GOVERNOR'];
     return {
       id:    data.user.id,
       email: data.user.email ?? '',
-      role:  (data.user.user_metadata?.role as string) ?? 'CITIZEN',
+      role:  allowedRoles.includes(role) ? role : 'CITIZEN',
+      fullName: String(data.user.user_metadata?.full_name ?? data.user.email?.split('@')[0] ?? 'User'),
     };
   }
 

@@ -38,30 +38,43 @@ function LoginForm() {
   const onSubmit = async (data: FormData) => {
     setServerError(null);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email:    data.email.trim().toLowerCase(),
-        password: data.password,
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: data.email.trim().toLowerCase(),
+          password: data.password,
+        }),
       });
-
-      if (error) {
-        // Surface a clear, helpful message
-        const msg = error.message.toLowerCase();
-        if (msg.includes("invalid login") || msg.includes("invalid credentials")) {
-          setServerError("Incorrect email or password. Double-check and try again.");
-        } else if (msg.includes("email not confirmed") || msg.includes("not confirmed")) {
-          setServerError(
-            "Your email address has not been confirmed yet. " +
-            "Check your inbox for a confirmation link, or contact support."
-          );
-        } else {
-          setServerError(error.message);
-        }
+      const result = await response.json() as {
+        accessToken?: string;
+        refreshToken?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.accessToken || !result.refreshToken) {
+        setServerError(
+          result.error ?? "Unable to sign in. Please check your connection and try again.",
+        );
         return;
       }
 
-      router.push("/dashboard");
-    } catch {
-      setServerError("Something went wrong. Please try again.");
+      const { error } = await supabase.auth.setSession({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+      });
+      if (error) {
+        setServerError("Sign-in succeeded, but the session could not be saved. Please try again.");
+        return;
+      }
+
+      router.replace("/dashboard");
+      router.refresh();
+    } catch (error) {
+      setServerError(
+        error instanceof Error && (error.message.includes("fetch") || error.message.includes("network"))
+          ? "Unable to reach the authentication service. Check your connection and try again."
+          : "Something went wrong while signing in. Please try again.",
+      );
     }
   };
 
@@ -98,7 +111,7 @@ function LoginForm() {
           <div className="flex items-start gap-2 rounded-xl bg-[#13C98A]/10 border border-[#13C98A]/30 p-3 mb-4">
             <CheckCircle2 size={16} className="text-[#13C98A] shrink-0 mt-0.5" />
             <p className="text-sm text-[#13C98A]">
-              Account created! Sign in with your email and password below.
+              Account created successfully. Sign in with your email and password.
             </p>
           </div>
         )}
@@ -177,27 +190,7 @@ function LoginForm() {
             {serverError && (
               <div className="flex items-start gap-2 rounded-xl bg-[#EF4444]/10 border border-[#EF4444]/30 p-3">
                 <AlertCircle size={16} className="text-[#EF4444] shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm text-[#EF4444]">{serverError}</p>
-                  {serverError.includes("not been confirmed") && (
-                    <p className="text-xs text-[#AAB4CC] mt-1">
-                      Tip: Check your spam folder, or{" "}
-                      <button
-                        type="button"
-                        className="text-[#6338F5] hover:underline"
-                        onClick={async () => {
-                          const email = (document.getElementById("login-email") as HTMLInputElement)?.value;
-                          if (email) {
-                            await supabase.auth.resend({ type: "signup", email });
-                            setServerError("Confirmation email re-sent! Check your inbox.");
-                          }
-                        }}
-                      >
-                        resend confirmation email
-                      </button>
-                    </p>
-                  )}
-                </div>
+                <p className="text-sm text-[#EF4444]">{serverError}</p>
               </div>
             )}
 

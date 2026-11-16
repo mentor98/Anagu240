@@ -30,6 +30,14 @@ export const LandDetailView: React.FC = () => {
   const [buyerWallet, setBuyerWallet] = useState('');
   const [agreedConsideration, setAgreedConsideration] = useState('');
 
+  if (!parcel) {
+    return (
+      <div className="rounded-lg border border-slate-200 p-6 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+        This parcel is not available in your account.
+      </div>
+    );
+  }
+
   const handleInitiateTransfer = (e: React.FormEvent) => {
     e.preventDefault();
     addNotification({

@@ -20,11 +20,11 @@ export const GovernorPortal: React.FC = () => {
   const isGovernor = currentRole === 'governor';
 
   // Revocation Form State
-  const [selectedParcelId, setSelectedParcelId] = useState(parcels.find(p => p.status === 'verified')?.id || parcels[0].id);
+  const [selectedParcelId, setSelectedParcelId] = useState(parcels.find(p => p.status === 'verified')?.id || parcels[0]?.id || '');
   const [revocationReason, setRevocationReason] = useState<RevocationRecord['revocationReason']>('Overriding Public Interest');
-  const [gazetteRef, setGazetteRef] = useState(`LGSG/VOL-60/NO-0${Math.floor(10 + Math.random() * 90)}`);
-  const [compensationAmount, setCompensationAmount] = useState(450000000);
-  const [executivePasskey, setExecutivePasskey] = useState('STATE-GOV-AUTH-KEY-8849');
+  const [gazetteRef, setGazetteRef] = useState('');
+  const [compensationAmount, setCompensationAmount] = useState(0);
+  const [executivePasskey, setExecutivePasskey] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
@@ -44,7 +44,15 @@ export const GovernorPortal: React.FC = () => {
     }, 800);
   };
 
-  const targetParcel = parcels.find(p => p.id === selectedParcelId) || parcels[0];
+  const targetParcel = parcels.find(p => p.id === selectedParcelId);
+
+  if (!targetParcel) {
+    return (
+      <div className="rounded-lg border border-slate-200 p-6 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+        No recorded land titles are available for revocation review.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

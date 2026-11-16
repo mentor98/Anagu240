@@ -154,7 +154,7 @@ Copy the relevant values into your `.env` file:
 
 ```
 SUPABASE_URL=https://wcykxpsbtbsoxxmitslk.supabase.co
-SUPABASE_SECRET_KEY=sb_secret_thAF9VsMgYKehwhRhBj0TA_gTVhKROO
+SUPABASE_SECRET_KEY=YOUR_SERVER_SIDE_SUPABASE_SECRET_KEY
 SUPABASE_JWKS_URL=https://wcykxpsbtbsoxxmitslk.supabase.co/auth/v1/.well-known/jwks.json
 ```
 

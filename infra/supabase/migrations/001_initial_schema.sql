@@ -212,16 +212,19 @@ ALTER TABLE audit_events       ENABLE ROW LEVEL SECURITY;
 -- No explicit policy needed — service role can do everything.
 
 -- ── applications: citizens can read their own ─────────────────────────────────
-CREATE POLICY IF NOT EXISTS "applications_select_own"
+DROP POLICY IF EXISTS "applications_select_own" ON applications;
+CREATE POLICY "applications_select_own"
   ON applications FOR SELECT
   USING (applicant_id = auth.uid());
 
-CREATE POLICY IF NOT EXISTS "applications_insert_own"
+DROP POLICY IF EXISTS "applications_insert_own" ON applications;
+CREATE POLICY "applications_insert_own"
   ON applications FOR INSERT
   WITH CHECK (applicant_id = auth.uid());
 
 -- Registrars, admins, and governors can read all applications
-CREATE POLICY IF NOT EXISTS "applications_select_staff"
+DROP POLICY IF EXISTS "applications_select_staff" ON applications;
+CREATE POLICY "applications_select_staff"
   ON applications FOR SELECT
   USING (
     EXISTS (
@@ -232,7 +235,8 @@ CREATE POLICY IF NOT EXISTS "applications_select_staff"
   );
 
 -- Registrars can update application status
-CREATE POLICY IF NOT EXISTS "applications_update_registrar"
+DROP POLICY IF EXISTS "applications_update_registrar" ON applications;
+CREATE POLICY "applications_update_registrar"
   ON applications FOR UPDATE
   USING (
     EXISTS (
@@ -243,12 +247,14 @@ CREATE POLICY IF NOT EXISTS "applications_update_registrar"
   );
 
 -- ── land_titles: owners can read their own ────────────────────────────────────
-CREATE POLICY IF NOT EXISTS "land_titles_select_own"
+DROP POLICY IF EXISTS "land_titles_select_own" ON land_titles;
+CREATE POLICY "land_titles_select_own"
   ON land_titles FOR SELECT
   USING (owner_user_id = auth.uid());
 
 -- Registrars, admins, governors can read all titles
-CREATE POLICY IF NOT EXISTS "land_titles_select_staff"
+DROP POLICY IF EXISTS "land_titles_select_staff" ON land_titles;
+CREATE POLICY "land_titles_select_staff"
   ON land_titles FOR SELECT
   USING (
     EXISTS (
@@ -259,7 +265,8 @@ CREATE POLICY IF NOT EXISTS "land_titles_select_staff"
   );
 
 -- ── audit_events: admin/registrar/governor can read ──────────────────────────
-CREATE POLICY IF NOT EXISTS "audit_events_select_staff"
+DROP POLICY IF EXISTS "audit_events_select_staff" ON audit_events;
+CREATE POLICY "audit_events_select_staff"
   ON audit_events FOR SELECT
   USING (
     EXISTS (
@@ -270,12 +277,14 @@ CREATE POLICY IF NOT EXISTS "audit_events_select_staff"
   );
 
 -- ── parcels: authenticated users can read all (public parcel boundaries) ──────
-CREATE POLICY IF NOT EXISTS "parcels_select_authenticated"
+DROP POLICY IF EXISTS "parcels_select_authenticated" ON parcels;
+CREATE POLICY "parcels_select_authenticated"
   ON parcels FOR SELECT
   USING (auth.role() = 'authenticated');
 
 -- ── documents: applicants can read their own documents ────────────────────────
-CREATE POLICY IF NOT EXISTS "documents_select_own"
+DROP POLICY IF EXISTS "documents_select_own" ON documents;
+CREATE POLICY "documents_select_own"
   ON documents FOR SELECT
   USING (
     EXISTS (

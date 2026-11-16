@@ -18,7 +18,6 @@ export class AuthService {
     email: string,
     password: string,
     fullName: string,
-    role: UserRole = UserRole.CITIZEN,
     nationalId?: string,
     walletAddress?: string,
   ): Promise<{ user: Omit<User, 'passwordHash'>; accessToken: string }> {
@@ -30,7 +29,7 @@ export class AuthService {
       email,
       passwordHash,
       fullName,
-      role,
+      role: UserRole.CITIZEN,
       nationalId: nationalId ?? null,
       walletAddress: walletAddress ?? null,
     });
@@ -43,7 +42,7 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.userRepo.findOne({ where: { email, isActive: true } });
-    if (!user) return null;
+    if (!user?.passwordHash) return null;
     const valid = await bcrypt.compare(password, user.passwordHash);
     return valid ? user : null;
   }

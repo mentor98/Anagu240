@@ -16,19 +16,25 @@ export class AuditEvent {
   @Column({ name: 'event_type' })
   eventType: string;
 
-  @Column({ name: 'from_status', nullable: true })
+  @Column({ name: 'from_status', type: 'text', nullable: true })
   fromStatus: string | null;
 
-  @Column({ name: 'to_status', nullable: true })
+  @Column({ name: 'to_status', type: 'text', nullable: true })
   toStatus: string | null;
 
-  @Column({ name: 'actor_role', nullable: true })
+  @Column({
+    name: 'actor_role',
+    type: 'enum',
+    enum: ['CITIZEN', 'SURVEYOR', 'REGISTRAR', 'LAND_ADMINISTRATOR', 'GOVERNOR'],
+    enumName: 'user_role',
+    nullable: true,
+  })
   actorRole: string | null;
 
   @Column({ name: 'actor_id' })
   actorId: string;
 
-  @Column({ name: 'actor_address', length: 42, nullable: true })
+  @Column({ name: 'actor_address', type: 'varchar', length: 42, nullable: true })
   actorAddress: string | null;
 
   @Column({ type: 'jsonb', nullable: true })

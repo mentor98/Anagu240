@@ -25,7 +25,7 @@ export class Document {
   @Column({ name: 'file_size_bytes', type: 'bigint', nullable: true })
   fileSizeBytes: string | null;
 
-  @Column({ name: 'uploaded_by', nullable: true })
+  @Column({ name: 'uploaded_by', type: 'uuid', nullable: true })
   uploadedBy: string | null;
 
   @CreateDateColumn({ name: 'created_at' })

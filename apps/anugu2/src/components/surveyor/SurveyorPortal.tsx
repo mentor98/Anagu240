@@ -20,9 +20,9 @@ export const SurveyorPortal: React.FC = () => {
 
   const selectedJob = surveyJobs.find(j => j.id === selectedJobId) || surveyJobs[0];
 
-  const [planRef, setPlanRef] = useState(`LA/SRV/2026/${Math.floor(1000 + Math.random() * 9000)}`);
+  const [planRef, setPlanRef] = useState('');
   const [beaconsCount, setBeaconsCount] = useState(4);
-  const [fieldNotes, setFieldNotes] = useState('Closed differential GPS traverse completed with error ratio 1:30,000. All boundary beacons anchored in concrete.');
+  const [fieldNotes, setFieldNotes] = useState('');
   const [isLodging, setIsLodging] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -39,6 +39,14 @@ export const SurveyorPortal: React.FC = () => {
       });
     }, 600);
   };
+
+  if (!selectedJob) {
+    return (
+      <div className="rounded-lg border border-slate-200 p-6 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+        No survey jobs are assigned to this account.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

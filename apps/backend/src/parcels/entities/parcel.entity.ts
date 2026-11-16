@@ -24,13 +24,13 @@ export class Parcel {
   @Column({ name: 'overlap_tolerance_m', type: 'double precision', default: 0.5 })
   overlapToleranceM: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   lga: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   state: string | null;
 
-  @Column({ name: 'address_desc', nullable: true })
+  @Column({ name: 'address_desc', type: 'text', nullable: true })
   addressDesc: string | null;
 
   @CreateDateColumn({ name: 'created_at' })

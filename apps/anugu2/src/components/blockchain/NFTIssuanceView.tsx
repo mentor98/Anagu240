@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { Award, ShieldCheck, Lock, ExternalLink, QrCode, FileCheck, Layers } from 'lucide-react';
 import { BackButton } from '../common/BackButton';
 
 export const NFTIssuanceView: React.FC = () => {
   const { parcels, setSelectedCertificateParcel } = useApp();
-  const [selectedToken, setSelectedToken] = useState(parcels[0]);
-
   const issuedTokens = parcels.filter(p => p.certificateIssued);
 
   return (
@@ -94,6 +92,11 @@ export const NFTIssuanceView: React.FC = () => {
           </div>
         ))}
       </div>
+      {issuedTokens.length === 0 && (
+        <p className="rounded-lg border border-slate-200 p-6 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+          No NFT titles have been issued to this account.
+        </p>
+      )}
     </div>
   );
 };

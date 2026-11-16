@@ -1898,7 +1898,7 @@ Work through this checklist in order. Do not tick a box until the gate condition
 |-------|-------|
 | Project URL | `https://wcykxpsbtbsoxxmitslk.supabase.co` |
 | Publishable Key | `sb_publishable_MwJtKiIDQB-46QhW1xvkXA_Lh_apL1j` |
-| Secret Key | `sb_secret_thAF9VsMgYKehwhRhBj0TA_gTVhKROO` *(server-side only — never expose in browser)* |
+| Secret Key | Set in the server-only `.env`; never commit or expose it. |
 | JWKS URL | `https://wcykxpsbtbsoxxmitslk.supabase.co/auth/v1/.well-known/jwks.json` |
 
 ### What Supabase Does in This Project
@@ -1966,7 +1966,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_MwJtKiIDQB-46QhW1xvkXA_Lh_ap
 Backend (`.env` / root):
 ```
 SUPABASE_URL=https://wcykxpsbtbsoxxmitslk.supabase.co
-SUPABASE_SECRET_KEY=sb_secret_thAF9VsMgYKehwhRhBj0TA_gTVhKROO
+SUPABASE_SECRET_KEY=YOUR_SERVER_SIDE_SUPABASE_SECRET_KEY
 SUPABASE_JWKS_URL=https://wcykxpsbtbsoxxmitslk.supabase.co/auth/v1/.well-known/jwks.json
 ```
 

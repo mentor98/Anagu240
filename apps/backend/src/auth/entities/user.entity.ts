@@ -19,22 +19,22 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column({ name: 'password_hash' })
-  passwordHash: string;
+  @Column({ name: 'password_hash', type: 'text', nullable: true })
+  passwordHash: string | null;
 
   @Column({ name: 'full_name' })
   fullName: string;
 
-  @Column({ name: 'national_id', unique: true, nullable: true })
+  @Column({ name: 'national_id', type: 'text', unique: true, nullable: true })
   nationalId: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   phone: string | null;
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.CITIZEN })
   role: UserRole;
 
-  @Column({ name: 'wallet_address', length: 42, nullable: true })
+  @Column({ name: 'wallet_address', type: 'varchar', length: 42, nullable: true })
   walletAddress: string | null;
 
   @Column({ name: 'is_active', default: true })

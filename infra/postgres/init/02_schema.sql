@@ -42,7 +42,7 @@ CREATE TYPE revocation_ground AS ENUM (
 CREATE TABLE users (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email           TEXT UNIQUE NOT NULL,
-    password_hash   TEXT NOT NULL,
+    password_hash   TEXT,
     full_name       TEXT NOT NULL,
     national_id     TEXT UNIQUE,
     phone           TEXT,

@@ -24,6 +24,14 @@ export const ApplicationTrackingView: React.FC = () => {
 
   const selectedApp = applications.find(a => a.id === selectedAppId) || applications[0];
 
+  if (!selectedApp) {
+    return (
+      <div className="rounded-lg border border-slate-200 p-6 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+        You have no land applications to track yet.
+      </div>
+    );
+  }
+
   // Unified 8-Stage ANAGU Pipeline from PDF Specification
   const pipelineStages = [
     { key: 'submitted', label: '1. Application Submission', icon: FileText, desc: 'Identity (NIN Tier 3), tenure claim, and fee clearance.' },

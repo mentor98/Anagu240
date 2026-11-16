@@ -427,3 +427,10 @@ html:not(.dark) a.bg-indigo-600 * {
   --tw-shadow-color: transparent !important;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06) !important;
 }
+
+*,
+*::before,
+*::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}

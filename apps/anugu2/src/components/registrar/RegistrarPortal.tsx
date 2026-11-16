@@ -25,6 +25,14 @@ export const RegistrarPortal: React.FC = () => {
   const selectedApp = applications.find(a => a.id === selectedAppId) || applications[0];
   const pendingQueue = applications.filter(a => a.status === 'registrar_review' || a.status === 'community_attestation');
 
+  if (!selectedApp) {
+    return (
+      <div className="rounded-lg border border-slate-200 p-6 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+        No land applications are awaiting registrar review.
+      </div>
+    );
+  }
+
   const handleApprove = () => {
     if (!selectedApp) return;
     setIsApproving(true);

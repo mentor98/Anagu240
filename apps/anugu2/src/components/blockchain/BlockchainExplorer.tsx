@@ -29,10 +29,10 @@ export const BlockchainExplorer: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <Cpu className="w-6 h-6 text-[#6338F5]" />
-          ANAGU Sovereign Blockchain Cadastre Explorer
+          Anagu blockchain activity
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          Inspect consensus finality, real-time geodetic blocks, validator nodes, and cryptographic land transactions.
+          Chain data appears here when a network and transaction indexer are configured. This view does not show simulated activity.
         </p>
       </div>
 
@@ -43,10 +43,9 @@ export const BlockchainExplorer: React.FC = () => {
             <span>Latest Block</span>
             <Layers className="w-4 h-4 text-indigo-400" />
           </div>
-          <div className="text-xl font-bold font-mono text-white">#{blocks[0]?.blockNumber}</div>
-          <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-            <span>Block Time ~3.2s</span>
+          <div className="text-xl font-bold font-mono text-white">{blocks[0] ? `#${blocks[0].blockNumber}` : '—'}</div>
+          <div className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
+            <span>{blocks.length ? 'Latest indexed block' : 'No indexed block data'}</span>
           </div>
         </div>
 
@@ -55,8 +54,8 @@ export const BlockchainExplorer: React.FC = () => {
             <span>Consensus Engine</span>
             <ShieldCheck className="w-4 h-4 text-[#13C98A]" />
           </div>
-          <div className="text-xl font-bold text-white">Raft-BFT</div>
-          <div className="text-[10px] text-slate-400">Crash & Byzantine Fault Tolerant</div>
+          <div className="text-xl font-bold text-white">Not configured</div>
+          <div className="text-[10px] text-slate-400">Network status unavailable</div>
         </div>
 
         <div className="p-4 rounded-xl bg-[#171A3B] border border-slate-800 space-y-1">
@@ -64,8 +63,8 @@ export const BlockchainExplorer: React.FC = () => {
             <span>Validator Nodes</span>
             <Server className="w-4 h-4 text-[#168BFF]" />
           </div>
-          <div className="text-xl font-bold text-white">4 Sovereign Nodes</div>
-          <div className="text-[10px] text-emerald-400">100% Quorum Online</div>
+          <div className="text-xl font-bold text-white">—</div>
+          <div className="text-[10px] text-slate-400">No validator status feed</div>
         </div>
 
         <div className="p-4 rounded-xl bg-[#171A3B] border border-slate-800 space-y-1">
@@ -73,8 +72,8 @@ export const BlockchainExplorer: React.FC = () => {
             <span>Avg Gas Per Title</span>
             <Zap className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-xl font-bold font-mono text-white">0.0028 ETH</div>
-          <div className="text-[10px] text-slate-400">Subsidized State Cadastre Fee</div>
+          <div className="text-xl font-bold font-mono text-white">—</div>
+          <div className="text-[10px] text-slate-400">No confirmed fee samples</div>
         </div>
       </div>
 
@@ -87,7 +86,7 @@ export const BlockchainExplorer: React.FC = () => {
               <Layers className="w-4 h-4 text-indigo-400" />
               Recent Consensus Blocks
             </h2>
-            <span className="text-[10px] font-mono text-slate-400">Auto-finalized</span>
+            <span className="text-[10px] font-mono text-slate-400">{blocks.length} indexed</span>
           </div>
 
           <div className="space-y-3">
@@ -119,6 +118,11 @@ export const BlockchainExplorer: React.FC = () => {
                 </div>
               </div>
             ))}
+            {blocks.length === 0 && (
+              <p className="rounded-lg border border-slate-700 p-4 text-xs text-slate-400">
+                No blockchain blocks are available. Configure a deployed network and indexer to populate this view.
+              </p>
+            )}
           </div>
 
           {selectedBlock && (
@@ -137,7 +141,7 @@ export const BlockchainExplorer: React.FC = () => {
           <div className="flex items-center justify-between pb-3 border-b border-slate-700/60">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <Receipt className="w-4 h-4 text-emerald-400" />
-              Live Cadastral Transactions
+              Recorded title transactions
             </h2>
             <span className="text-[10px] font-mono text-slate-400">{transactions.length} confirmed</span>
           </div>
@@ -163,6 +167,11 @@ export const BlockchainExplorer: React.FC = () => {
                 </div>
               </div>
             ))}
+            {transactions.length === 0 && (
+              <p className="rounded-lg border border-slate-700 p-4 text-xs text-slate-400">
+                No confirmed title transactions are recorded.
+              </p>
+            )}
           </div>
         </div>
       </div>

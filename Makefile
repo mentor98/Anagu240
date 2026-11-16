@@ -1,7 +1,7 @@
 # Anagu Land Administration Framework — Makefile
 .PHONY: help up down ps logs install build test test-contracts test-backend \
         test-web deploy-local seed-local verify-local dev-backend dev-web \
-        dev-mobile component4 fraud latency storage clean reset status
+        dev-mobile component4 fraud latency storage clean reset status db-init
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -34,7 +34,7 @@ dev-backend: ## Start NestJS backend in watch mode (port 3001)
 	cd apps/backend && ../../node_modules/.bin/nest start --watch
 
 dev-web: ## Start Next.js web app (port 3000)
-	cd apps/web && ../../node_modules/.bin/next dev -p 3000
+	node ./scripts/start-web.cjs
 
 dev-mobile: ## Start Expo mobile app
 	cd apps/mobile && npx expo start
@@ -42,7 +42,7 @@ dev-mobile: ## Start Expo mobile app
 # ── Build ───────────────────────────────────────────────────────────────────
 build: ## Build backend + web + contracts
 	cd apps/backend && ../../node_modules/.bin/nest build
-	cd apps/web && ../../node_modules/.bin/next build
+	npm --prefix apps/anugu2 run build
 	$(MAKE) compile-contracts
 	@echo "✓ All builds complete"
 
@@ -79,9 +79,9 @@ test-backend: ## Run NestJS backend unit tests (44 tests, no DB needed)
 	@echo "✓ Backend tests complete"
 
 # ── Web type-check ──────────────────────────────────────────────────────────
-test-web: ## TypeScript type-check the Next.js web app
-	@cd apps/web && ../../node_modules/.bin/tsc --noEmit
-	@echo "✓ Web type-check complete"
+test-web: ## TypeScript type-check the supplied AI Studio web app
+	@npm --prefix apps/anugu2 run lint
+	@echo "✓ Anagu UI type-check complete"
 
 # ── All tests ───────────────────────────────────────────────────────────────
 test: test-contracts test-backend test-web ## Run ALL tests
@@ -110,6 +110,9 @@ storage: ## Storage overhead only (Table 4D)
 	  --testPathPattern="storage-overhead" --runInBand --verbose
 
 # ── Status / cleanup ────────────────────────────────────────────────────────
+db-init: ## Apply PostgreSQL/PostGIS schema to the configured local or Docker database
+	@bash ./scripts/apply-db-schema.sh
+
 status: ## Full project status
 	@echo "=== Docker ===" && docker compose ps
 	@echo "" && echo "=== Git ===" && git log --oneline -4

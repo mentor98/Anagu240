@@ -3,6 +3,7 @@
  * Wraps the NestJS backend with automatic JWT injection and error normalisation.
  */
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import { supabase } from "@/lib/supabase";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1";
@@ -14,9 +15,13 @@ export const api: AxiosInstance = axios.create({
 });
 
 api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("anagu_token");
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        return Promise.reject(error);
+      }
+      const token = data.session?.access_token ?? localStorage.getItem("anagu_token");
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -32,7 +37,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && typeof window !== "undefined") {
       localStorage.removeItem("anagu_token");
       localStorage.removeItem("anagu_user");
-      window.location.href = "/(auth)/login";
+      window.location.href = "/login";
     }
     return Promise.reject(error);
   },

@@ -7,6 +7,7 @@
  * Step 4: Review and submit
  */
 import { useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -54,6 +55,15 @@ const STEPS = [
 // ── Coordinate state ──────────────────────────────────────────────────────────
 type Coordinate = { lat: number; lng: number };
 
+const GISMap = dynamic(() => import("@/components/gis/GISMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-64 rounded-xl bg-[#111832] border border-[#29345A] flex items-center justify-center text-sm text-[#AAB4CC]">
+      Loading parcel map…
+    </div>
+  ),
+});
+
 export default function NewApplicationPage() {
   const router = useRouter();
   const toast  = useToast();
@@ -81,6 +91,10 @@ export default function NewApplicationPage() {
       toast.error("Invalid coordinate", "Enter as: latitude, longitude");
       return;
     }
+    if (parts[0] < -90 || parts[0] > 90 || parts[1] < -180 || parts[1] > 180) {
+      toast.error("Invalid coordinate", "Latitude must be between -90 and 90, longitude between -180 and 180.");
+      return;
+    }
     setCoords((prev) => [...prev, { lat: parts[0], lng: parts[1] }]);
     setCoordInput("");
     setGisResult(null);
@@ -94,7 +108,7 @@ export default function NewApplicationPage() {
     setVerifying(true);
     try {
       const res = await api.post("/gis/verify", {
-        coordinates: coords.map((c) => [c.lat, c.lng] as [number, number]),
+        coordinates: coords.map((c) => [c.lng, c.lat] as [number, number]),
       });
       const r = res.data as { valid: boolean; diagnosticMessage?: string; reason?: string };
       setGisResult({
@@ -136,7 +150,7 @@ export default function NewApplicationPage() {
         ownerName:        form.ownerName,
         nationalId:       form.nationalId,
         surveyPlanNumber: form.surveyPlanNumber,
-        coordinates:      coords.map((c) => [c.lat, c.lng]),
+        coordinates:      coords.map((c) => [c.lng, c.lat]),
         lga:              form.lga,
         state:            form.state,
         landUse:          form.landUse,
@@ -337,12 +351,18 @@ export default function NewApplicationPage() {
               </div>
             )}
 
-            {/* Map placeholder */}
-            <div className="h-48 rounded-xl bg-[#111832] border border-[#29345A] flex items-center justify-center">
-              <div className="text-center">
-                <MapPin size={28} className="text-[#29345A] mx-auto mb-2" />
-                <p className="text-xs text-[#AAB4CC]">Interactive map coming soon — enter coordinates above</p>
-              </div>
+            <div className="h-64 overflow-hidden rounded-xl border border-[#29345A]">
+              <GISMap
+                mode="draw"
+                coordinates={coords.map(({ lat, lng }) => [lat, lng])}
+                onAddCoordinate={([lat, lng]) => {
+                  setCoords((current) => [...current, { lat, lng }]);
+                  setGisResult(null);
+                }}
+                verificationResult={gisResult
+                  ? { valid: gisResult.valid, diagnosticMessage: gisResult.message }
+                  : null}
+              />
             </div>
 
             {/* GIS result */}
@@ -380,7 +400,7 @@ export default function NewApplicationPage() {
                 </button>
                 <button
                   onClick={() => setStep(3)}
-                  disabled={!gisResult?.valid && coords.length > 0}
+                  disabled={!gisResult?.valid || coords.length < 3}
                   className="btn-primary"
                 >
                   Next <ChevronRight size={16} />

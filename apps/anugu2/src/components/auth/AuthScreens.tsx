@@ -3,13 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { ShieldCheck, ArrowRight, AlertTriangle, Key, Loader2, CheckCircle2 } from 'lucide-react';
 import { BackButton } from '../common/BackButton';
-import { signIn, signUpAndIn, supabase } from '../../lib/supabase';
+import { sendPasswordReset, signIn, signUpAndIn } from '../../lib/supabase';
 
 // ── Login Page ────────────────────────────────────────────────────────────────
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('olamideolatunde079@gmail.com');
-  const [password, setPassword] = useState('Anagu2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -73,12 +73,6 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-500/20 text-xs text-slate-600 dark:text-slate-400">
-            <div className="font-semibold text-slate-700 dark:text-slate-300 mb-1">Your account:</div>
-            <div>Email: <span className="font-mono text-indigo-600 dark:text-indigo-400">olamideolatunde079@gmail.com</span></div>
-            <div>Password: <span className="font-mono text-indigo-600 dark:text-indigo-400">Anagu2026!</span></div>
-          </div>
-
           <button
             type="submit"
             disabled={loading}
@@ -103,22 +97,17 @@ export const LoginPage: React.FC = () => {
 // ── Register Page ─────────────────────────────────────────────────────────────
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
-  const [role, setRole] = useState<'citizen' | 'surveyor' | 'customary'>('citizen');
   const [name, setName] = useState('');
   const [nin, setNin] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [surconLicense, setSurconLicense] = useState('SURCON/REG/2026/8849');
-  const [communityTitle, setCommunityTitle] = useState('Olofin Family Chieftaincy Council');
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setInfo(null);
     if (!password || password.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
@@ -127,19 +116,12 @@ export const RegisterPage: React.FC = () => {
     const { error: err } = await signUpAndIn(email, password, {
       full_name: name,
       phone,
-      role: role === 'customary' ? 'citizen' : role,
+      role: 'citizen',
       nin,
-      surcon_license: surconLicense,
-      community_title: communityTitle,
     });
     setLoading(false);
     if (err) {
-      if (err.includes('Account created')) {
-        setInfo(err);
-        setTimeout(() => navigate('/auth/login'), 3000);
-      } else {
-        setError(err);
-      }
+      setError(err);
       return;
     }
     navigate('/portal/dashboard');
@@ -153,17 +135,12 @@ export const RegisterPage: React.FC = () => {
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Create Cadastre Account</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Sovereign identity onboarding for landholders, surveyors, and customary trustees.
+            Create an account to register parcels and review your applications. Government roles are assigned by an administrator.
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 dark:bg-[#0d122e] rounded-xl border border-slate-200 dark:border-slate-800 text-[11px]">
-          {(['citizen','surveyor','customary'] as const).map(r => (
-            <button key={r} type="button" onClick={() => setRole(r)}
-              className={`py-2 px-1 rounded-lg font-semibold transition-colors truncate capitalize ${
-                role === r ? 'bg-[#6338F5] text-white shadow' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}>{r}</button>
-          ))}
+        <div className="rounded-lg border border-slate-200 p-3 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
+          New accounts start as landholders. Surveyor, registrar, administrator, and Governor permissions require approval and are assigned by Anagu administrators.
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -180,22 +157,6 @@ export const RegisterPage: React.FC = () => {
               placeholder="11-digit NIN (e.g. 7749-2810-942)"
               className="w-full bg-slate-50 dark:bg-[#0d122e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white font-mono" />
           </div>
-
-          {role === 'surveyor' && (
-            <div>
-              <label className="text-slate-700 dark:text-slate-300 block mb-1 font-medium">SURCON License Number</label>
-              <input type="text" value={surconLicense} onChange={e => setSurconLicense(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-[#0d122e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white font-mono" />
-            </div>
-          )}
-
-          {role === 'customary' && (
-            <div>
-              <label className="text-slate-700 dark:text-slate-300 block mb-1 font-medium">Community Authority / Chieftaincy Council</label>
-              <input type="text" value={communityTitle} onChange={e => setCommunityTitle(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-[#0d122e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white" />
-            </div>
-          )}
 
           <div>
             <label className="text-slate-700 dark:text-slate-300 block mb-1 font-medium">Email Address</label>
@@ -225,23 +186,16 @@ export const RegisterPage: React.FC = () => {
             </div>
           )}
 
-          {info && (
-            <div className="flex items-start gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-              <p>{info}</p>
-            </div>
-          )}
-
           <button type="submit" disabled={loading}
             className="w-full py-2.5 rounded-xl bg-[#6338F5] hover:bg-[#5229db] text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-md shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-60">
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            <span>{loading ? 'Creating Account...' : 'Create Verified Sovereign Account'}</span>
+            <span>{loading ? 'Creating account…' : 'Create account and continue'}</span>
           </button>
         </form>
 
         <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
-          <span>Already registered? </span>
-          <Link to="/auth/login" className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">Sign In Here</Link>
+          <span>Already have an account? </span>
+          <Link to="/auth/login" className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">Continue to account</Link>
         </div>
       </div>
     </div>
@@ -253,16 +207,23 @@ export const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Import supabase inline to avoid circular
-    await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/auth/reset-password',
-    });
+    setError(null);
+    try {
+      const { error: resetError } = await sendPasswordReset(
+        email,
+        `${window.location.origin}/auth/reset-password`,
+      );
+      if (resetError) throw resetError;
+      setSent(true);
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : 'Password reset could not be requested.');
+    }
     setLoading(false);
-    setSent(true);
   };
 
   return (
@@ -289,6 +250,7 @@ export const ForgotPasswordPage: React.FC = () => {
               <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                 className="w-full bg-slate-50 dark:bg-[#0d122e] border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white" required />
             </div>
+            {error && <p role="alert" className="text-rose-600">{error}</p>}
             <button type="submit" disabled={loading}
               className="w-full py-2.5 rounded-xl bg-[#6338F5] text-white font-bold text-xs uppercase flex items-center justify-center gap-2 disabled:opacity-60">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -311,7 +273,7 @@ export const AccessDeniedPage: React.FC = () => {
         <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto" />
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Access Denied</h1>
         <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-          Your active persona ({currentRole}) does not have permission for this operation. Use the role switcher to simulate the appropriate institutional role.
+          Your assigned role ({currentRole}) does not have permission for this operation. Contact an administrator if you believe this is incorrect.
         </p>
         <div className="flex flex-col gap-2">
           <Link to="/portal/dashboard" className="w-full py-2.5 rounded-xl bg-[#6338F5] text-white font-semibold text-xs">Return to Dashboard</Link>

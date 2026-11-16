@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
+import { keccak256, toUtf8Bytes } from 'ethers';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 export type Coordinate = [number, number]; // [longitude, latitude] in WGS 84
@@ -96,9 +97,6 @@ export class SpatialVerificationService {
     }
 
     // ── Steps 4–5: Overlap check (ST_Intersects + ST_Buffer) ─────────
-    // Convert metres → degrees (approximate; 1 degree ≈ 111,319.9 m at equator)
-    const toleranceDegrees = tolerance / 111_319.9;
-
     const overlapRows = await this.dataSource.query<Array<{ id: string }>>(
       `SELECT id
        FROM   parcels
@@ -127,11 +125,7 @@ export class SpatialVerificationService {
     }
 
     // ── Step 6: Compute spatialHash for NFT metadata ──────────────────
-    const hashRows = await this.dataSource.query<Array<{ hash: string }>>(
-      `SELECT encode(digest($1, 'sha256'), 'hex') AS hash`,
-      [wkt],
-    );
-    const spatialHash = '0x' + hashRows[0].hash;
+    const spatialHash = keccak256(toUtf8Bytes(wkt));
 
     this.logger.log(`Parcel passed spatial verification. spatialHash=${spatialHash}`);
 

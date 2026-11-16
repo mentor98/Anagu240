@@ -51,7 +51,7 @@ export function useSupabaseAuth() {
       id:       supaUser.id,
       email:    supaUser.email ?? '',
       fullName: (supaUser.user_metadata?.full_name as string) ?? '',
-      role:     (supaUser.user_metadata?.role as string) ?? 'CITIZEN',
+      role:     (supaUser.app_metadata?.role as string) ?? 'CITIZEN',
     };
     setAuth(s.access_token, authUser);
   }
