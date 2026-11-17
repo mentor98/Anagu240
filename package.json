@@ -6,7 +6,7 @@
   "workspaces": [
     "apps/backend",
     "apps/web",
-    "apps/mobile",
+    "apps/anugu2",
     "contracts"
   ],
   "dependencies": {
