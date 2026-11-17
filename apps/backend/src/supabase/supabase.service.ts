@@ -143,4 +143,59 @@ export class SupabaseService implements OnModuleInit {
 
     if (error) this.logger.error('Supabase syncAuditEvent failed', error.message);
   }
+
+  /**
+   * Auto-confirm a user's email address via Supabase admin API.
+   * This is called during signup to skip the email verification step.
+   *
+   * @param userId - Supabase user ID
+   * @param email - User email (for verification)
+   */
+  async confirmEmail(userId: string, email?: string): Promise<boolean> {
+    try {
+      const { error } = await this.admin.auth.admin.updateUserById(userId, {
+        email_confirm: true,
+      });
+
+      if (error) {
+        this.logger.warn(`Email auto-confirmation failed for user ${userId}:`, error.message);
+        return false;
+      }
+
+      this.logger.log(`Email auto-confirmed for user ${userId} (${email})`);
+      return true;
+    } catch (err) {
+      this.logger.error(`Email auto-confirmation error for user ${userId}:`, err);
+      return false;
+    }
+  }
+
+  /**
+   * Find and auto-confirm a user by email address.
+   * Useful for login auto-confirmation fallback.
+   *
+   * @param email - User email to find and confirm
+   */
+  async confirmEmailByEmail(email: string): Promise<boolean> {
+    try {
+      // Query all users to find by email
+      const { data: users, error: listError } = await this.admin.auth.admin.listUsers();
+
+      if (listError) {
+        this.logger.warn(`Failed to list users for email confirmation:`, listError.message);
+        return false;
+      }
+
+      const user = users?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+      if (!user) {
+        this.logger.warn(`User not found for email confirmation: ${email}`);
+        return false;
+      }
+
+      return this.confirmEmail(user.id, email);
+    } catch (err) {
+      this.logger.error(`Email confirmation lookup error for ${email}:`, err);
+      return false;
+    }
+  }
 }
