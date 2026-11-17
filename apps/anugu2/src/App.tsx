@@ -55,6 +55,10 @@ import { ProfileView } from './components/shared/ProfileView';
 import { SettingsView } from './components/shared/SettingsView';
 import { HelpFAQView } from './components/shared/HelpFAQView';
 import { NotFoundView } from './components/shared/NotFoundView';
+// Marketplace & Web3
+import { LandMarketplace } from './components/marketplace/LandMarketplace';
+// Admin Portal (separate /admin route — password protected)
+import { AdminPortal } from './components/admin/AdminPortal';
 
 // Dynamic Role Dashboard Dispatcher
 const RoleDashboardDispatcher: React.FC = () => {
@@ -129,6 +133,10 @@ const AppLayout: React.FC = () => {
           }`}
         >
           <Routes>
+            {/* Admin Portal — completely separate password-protected URL */}
+            <Route path="/admin" element={<AdminPortal />} />
+            <Route path="/admin/*" element={<AdminPortal />} />
+
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/verify" element={<PublicVerifyPage />} />
@@ -184,6 +192,10 @@ const AppLayout: React.FC = () => {
             <Route path="/portal/settings" element={<SettingsView />} />
             <Route path="/portal/help" element={<HelpFAQView />} />
             </Route>
+
+            {/* Land Marketplace — public but needs wallet */}
+            <Route path="/marketplace" element={<LandMarketplace />} />
+            <Route path="/portal/marketplace" element={<LandMarketplace />} />
 
             {/* Fallback 404 */}
             <Route path="*" element={<NotFoundView />} />

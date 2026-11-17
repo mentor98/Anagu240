@@ -92,6 +92,26 @@ export function signOut(): void {
   window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
 }
 
-export async function sendPasswordReset(): Promise<{ error: Error | null }> {
-  return { error: new Error("Password recovery is not configured. Contact the Anagu administrator.") };
+export async function sendPasswordReset(email: string, redirectTo?: string): Promise<{ error: Error | null }> {
+  try {
+    const res = await fetch("https://wcykxpsbtbsoxxmitslk.supabase.co/auth/v1/recover", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": "sb_publishable_MwJtKiIDQB-46QhW1xvkXA_Lh_apL1j",
+      },
+      body: JSON.stringify({
+        email,
+        gotrue_meta_security: {},
+        redirect_to: redirectTo,
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { error: new Error((data as any).msg ?? "Reset request failed") };
+    }
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err : new Error("Network error") };
+  }
 }
