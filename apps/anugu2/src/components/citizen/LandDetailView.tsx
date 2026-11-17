@@ -2,21 +2,14 @@ import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
-  MapPin,
-  Award,
-  Layers,
-  ShieldCheck,
-  FileText,
-  User,
-  ArrowLeft,
-  Calendar,
-  AlertTriangle,
-  Send,
-  Lock,
-  ExternalLink
+  MapPin, Award, Layers, ShieldCheck, FileText, User,
+  ArrowLeft, Calendar, AlertTriangle, Send, Lock, ExternalLink,
+  ShoppingCart, Wallet, Loader2, CheckCircle2, X
 } from 'lucide-react';
 import { BackButton } from '../common/BackButton';
-import { CadastreGoogleMap } from '../gis/CadastreGoogleMap';
+import { LeafletMap } from '../gis/LeafletMap';
+import { useWallet } from '../../hooks/useWallet';
+import { initiateLandPurchase } from '../../lib/web3';
 
 export const LandDetailView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,11 +17,17 @@ export const LandDetailView: React.FC = () => {
   const { parcels, setSelectedCertificateParcel, currentRole, addNotification } = useApp();
 
   const parcel = parcels.find(p => p.id === id) || parcels[0];
+  const { wallet, connecting, connect, hasWallet } = useWallet();
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [buyerName, setBuyerName] = useState('');
   const [buyerNIN, setBuyerNIN] = useState('');
   const [buyerWallet, setBuyerWallet] = useState('');
   const [agreedConsideration, setAgreedConsideration] = useState('');
+  const [buyState, setBuyState] = useState<'idle'|'pending'|'success'|'error'>('idle');
+  const [buyTxHash, setBuyTxHash] = useState('');
+  const [buyError, setBuyError] = useState('');
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [priceInput, setPriceInput] = useState('1.25');
 
   if (!parcel) {
     return (
@@ -37,6 +36,16 @@ export const LandDetailView: React.FC = () => {
       </div>
     );
   }
+
+  const handleBuy = async () => {
+    if (!wallet.connected) { await connect(); return; }
+    setBuyState('pending'); setBuyError('');
+    try {
+      const r = await initiateLandPurchase({ tokenId: parcel.id, sellerAddress: '0xFE3B557E8Fb62b89F4916B721be55cEb828dBd73', priceEth: priceInput, parcelTitle: parcel.titleNumber });
+      if (r.success) { setBuyTxHash(r.txHash); setBuyState('success'); addNotification({ title: 'Purchase Submitted', message: `Payment for ${parcel.titleNumber} sent. Registrar review pending.`, type: 'success' }); }
+      else { setBuyState('error'); setBuyError(r.error ?? 'Failed'); }
+    } catch (err: any) { setBuyState('error'); setBuyError(err.message ?? 'Failed'); }
+  };
 
   const handleInitiateTransfer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,14 +228,7 @@ export const LandDetailView: React.FC = () => {
             </div>
 
             {/* Live Satellite / Roadmap Parcel Boundary Map */}
-            <CadastreGoogleMap
-              parcels={[parcel]}
-              selectedParcel={parcel}
-              showBeacons={true}
-              showAllParcels={false}
-              heightClass="h-[230px]"
-              compact={true}
-            />
+            <LeafletMap parcels={[{id: parcel.id, title: parcel.titleNumber, coords: parcel.coordinates.map(c => ({lat: c.lat, lng: c.lng})), color: '#13C98A'}]} center={parcel.coordinates[0] ? {lat: parcel.coordinates[0].lat, lng: parcel.coordinates[0].lng} : {lat: 6.4541, lng: 3.3947}} height="h-56" readOnly />
 
             <Link
               to="/portal/gis"

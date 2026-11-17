@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Loader2, Search, XCircle } from 'lucide-react';
-import { publicApiRequest } from '../../lib/api';
 import { BackButton } from '../common/BackButton';
+import { INITIAL_PARCELS } from '../../data/mockData';
 
 type TitleVerification = {
   tokenId: string;
@@ -22,37 +22,52 @@ export const PublicVerifyPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const verify = async (value: string) => {
+  const verify = (value: string) => {
     const tokenId = value.trim();
     if (!tokenId) return;
     setQuery(tokenId);
     setTitle(null);
     setError('');
     setLoading(true);
-    try {
-      const result = await publicApiRequest<TitleVerification>(
-        `/public/titles/${encodeURIComponent(tokenId)}`,
+
+    // Search mock parcel data — no backend required
+    setTimeout(() => {
+      const parcel = INITIAL_PARCELS.find(p =>
+        p.titleNumber.toLowerCase() === tokenId.toLowerCase() ||
+        p.tokenHash.toLowerCase() === tokenId.toLowerCase() ||
+        p.id === tokenId
       );
-      setTitle(result);
-    } catch (verificationError) {
-      setError(verificationError instanceof Error ? verificationError.message : 'Title verification failed.');
-    } finally {
+
+      if (parcel) {
+        setTitle({
+          tokenId: parcel.tokenHash,
+          parcelId: parcel.id,
+          ownerAddress: parcel.ownerNationalId,
+          isRevoked: parcel.status === 'revoked',
+          issueTransaction: parcel.tokenHash,
+          issueBlock: String(parcel.blockNumber),
+          revocationTransaction: null,
+          chainId: '1337',
+        });
+      } else {
+        setError(`No title found for "${tokenId}". Try: C-OF-O-2026-004912`);
+      }
       setLoading(false);
-    }
+    }, 600);
   };
 
   useEffect(() => {
     const value = new URLSearchParams(location.search).get('q');
-    if (value) void verify(value);
+    if (value) verify(value);
   }, [location.search]);
 
   const handleSearch = (event: React.FormEvent) => {
     event.preventDefault();
-    void verify(query);
+    verify(query);
   };
 
-  const explorerUrl = title?.chainId === '11155111' && title.issueTransaction
-    ? `https://sepolia.etherscan.io/tx/${title.issueTransaction}`
+  const explorerUrl = title?.issueTransaction
+    ? `https://besu.anagu.gov/tx/${title.issueTransaction}`
     : null;
 
   return (
