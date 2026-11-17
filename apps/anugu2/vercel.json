@@ -14,7 +14,6 @@
     }
   ],
   "env": {
-    "VITE_GOOGLE_MAPS_API_KEY": "",
     "VITE_SUPABASE_URL": "https://wcykxpsbtbsoxxmitslk.supabase.co",
     "VITE_SUPABASE_ANON": "sb_publishable_MwJtKiIDQB-46QhW1xvkXA_Lh_apL1j"
   }
